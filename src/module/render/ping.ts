@@ -9,6 +9,12 @@ export interface PingOptions {
     color: number;
     size: number;
     durationMs: number;
+    /**
+     * Fired exactly once when the ping is torn down — either by natural
+     * animation completion or by an external `handle.destroy()`. Useful
+     * for unregistering the ping from a higher-level registry.
+     */
+    onDispose?: () => void;
 }
 
 export interface PingHandle {
@@ -36,6 +42,7 @@ export function createPing(opts: PingOptions): PingHandle {
         disposed = true;
         parent.removeChild(visual.container);
         visual.container.destroy({ children: true });
+        opts.onDispose?.();
     };
 
     const cancel = runAnimation(visual.container, {

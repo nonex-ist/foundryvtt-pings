@@ -9,6 +9,230 @@ var DEFAULT_PING_COLOR = 11184810;
 var RATE_LIMIT_CAPACITY = 3;
 var RATE_LIMIT_WINDOW_MS = 5e3;
 
+// src/module/render/animation.ts
+function runAnimation(container, config) {
+  const { durationMs, fadeInMs, fadeOutMs, update, onComplete } = config;
+  const ticker = canvas.app.ticker;
+  const startMs = performance.now();
+  const totalMs = fadeInMs + durationMs + fadeOutMs;
+  let canceled = false;
+  const tick = () => {
+    if (canceled) return;
+    const elapsed = performance.now() - startMs;
+    let alpha = 1;
+    if (elapsed < fadeInMs) {
+      alpha = elapsed / fadeInMs;
+    } else if (elapsed > fadeInMs + durationMs) {
+      const fadeOutElapsed = elapsed - fadeInMs - durationMs;
+      alpha = Math.max(0, 1 - fadeOutElapsed / fadeOutMs);
+    }
+    container.alpha = alpha;
+    update(elapsed);
+    if (elapsed >= totalMs) {
+      canceled = true;
+      ticker.remove(tick);
+      onComplete();
+    }
+  };
+  ticker.add(tick);
+  return () => {
+    if (canceled) return;
+    canceled = true;
+    ticker.remove(tick);
+  };
+}
+
+// src/module/render/graphics.ts
+var HERE_RING_COUNT = 3;
+var HERE_CYCLE_MS = 2e3;
+var HERE_LINE_WIDTH = 2;
+var HERE_BASE_ALPHA = 0.55;
+var HERE_INNER_RATIO = 0.15;
+function createHereVisual({ color, size }) {
+  const container = new PIXI.Container();
+  const outerR = size / 2;
+  const innerR = size * HERE_INNER_RATIO;
+  const rings = [];
+  for (let i = 0; i < HERE_RING_COUNT; i++) {
+    const ring = new PIXI.Graphics();
+    container.addChild(ring);
+    rings.push(ring);
+  }
+  function update(elapsedMs) {
+    for (let i = 0; i < HERE_RING_COUNT; i++) {
+      const phase = (elapsedMs / HERE_CYCLE_MS + i / HERE_RING_COUNT) % 1;
+      const radius = outerR + (innerR - outerR) * phase;
+      const alpha = HERE_BASE_ALPHA * (1 - phase * 0.85);
+      const ring = rings[i];
+      ring.clear();
+      ring.lineStyle(HERE_LINE_WIDTH, color, alpha);
+      ring.drawCircle(0, 0, radius);
+    }
+  }
+  update(0);
+  return { container, update };
+}
+function createPingVisual(kind, opts) {
+  switch (kind) {
+    case "here":
+      return createHereVisual(opts);
+    case "rally":
+    case "alert":
+    case "text":
+    case "token-attach":
+      throw new Error(`pings: visual for "${kind}" not yet implemented`);
+  }
+}
+
+// src/module/render/ping.ts
+function createPing(opts) {
+  const parent = canvas.controls.pings;
+  const visual = createPingVisual(opts.kind, { color: opts.color, size: opts.size });
+  visual.container.x = opts.position.x;
+  visual.container.y = opts.position.y;
+  visual.container.alpha = 0;
+  parent.addChild(visual.container);
+  let disposed = false;
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    parent.removeChild(visual.container);
+    visual.container.destroy({ children: true });
+    opts.onDispose?.();
+  };
+  const cancel = runAnimation(visual.container, {
+    durationMs: opts.durationMs,
+    fadeInMs: FADE_IN_MS,
+    fadeOutMs: FADE_OUT_MS,
+    update: visual.update,
+    onComplete: dispose
+  });
+  return {
+    destroy() {
+      cancel();
+      dispose();
+    }
+  };
+}
+
+// src/module/api/validators.ts
+var MAX_COLOR = 16777215;
+function assertPosition(value, name = "position") {
+  if (value === null || typeof value !== "object" || !Number.isFinite(value.x) || !Number.isFinite(value.y)) {
+    throw new TypeError(`pings: ${name} must be { x: number, y: number } with finite values`);
+  }
+  return value;
+}
+function assertColor(value, name = "color") {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > MAX_COLOR) {
+    throw new TypeError(
+      `pings: ${name} must be a finite number between 0x000000 and 0xffffff`
+    );
+  }
+  return value;
+}
+function assertId(value, name = "id") {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new TypeError(`pings: ${name} must be a non-empty string`);
+  }
+  return value;
+}
+function assertPositiveInt(value, name) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new TypeError(`pings: ${name} must be a positive integer`);
+  }
+  return value;
+}
+
+// src/module/api/index.ts
+function createApi(config) {
+  const registry = /* @__PURE__ */ new Map();
+  function displayLocally(payload) {
+    const handle = createPing({
+      kind: payload.kind,
+      position: payload.position,
+      color: payload.color,
+      size: config.canvasSizeProvider(),
+      durationMs: DEFAULT_PING_DURATION_MS,
+      onDispose: () => {
+        registry.delete(payload.id);
+      }
+    });
+    registry.set(payload.id, handle);
+    Hooks.callAll("pings.display", handle, payload);
+    return handle;
+  }
+  function buildHerePayload(position, opts) {
+    assertPosition(position);
+    const color = opts?.color !== void 0 ? assertColor(opts.color) : config.senderColorProvider();
+    if (opts?.durationMs !== void 0) assertPositiveInt(opts.durationMs, "durationMs");
+    const sceneId = config.sceneIdProvider();
+    const senderId = config.senderIdProvider();
+    if (!sceneId || !senderId) return null;
+    return {
+      id: foundry.utils.randomID(),
+      sceneId,
+      senderId,
+      kind: "here",
+      position,
+      color,
+      moveCanvas: false
+    };
+  }
+  return {
+    api: {
+      version: config.version,
+      here(position, opts) {
+        const payload = buildHerePayload(position, opts);
+        if (!payload) return null;
+        if (!Hooks.call("pings.preDisplay", payload)) return null;
+        if (!config.socketProvider()?.broadcast({ type: "displayPing", payload })) return null;
+        displayLocally(payload);
+        return payload.id;
+      },
+      showHere(position, opts) {
+        const payload = buildHerePayload(position, opts);
+        if (!payload) return null;
+        if (!Hooks.call("pings.preDisplay", payload)) return null;
+        displayLocally(payload);
+        return payload.id;
+      },
+      sendHere(position, opts) {
+        const payload = buildHerePayload(position, opts);
+        if (!payload) return null;
+        if (!Hooks.call("pings.preDisplay", payload)) return null;
+        if (!config.socketProvider()?.broadcast({ type: "displayPing", payload })) return null;
+        return payload.id;
+      },
+      remove(id, opts) {
+        assertId(id);
+        const handle = registry.get(id);
+        registry.delete(id);
+        handle?.destroy();
+        if (opts?.broadcast !== false) {
+          const sceneId = config.sceneIdProvider();
+          const socket = config.socketProvider();
+          if (sceneId && socket) {
+            socket.broadcast({
+              type: "removePing",
+              payload: { id, sceneId }
+            });
+          }
+        }
+      }
+    },
+    handleInboundDisplay(payload) {
+      if (!Hooks.call("pings.preDisplay", payload)) return;
+      displayLocally(payload);
+    },
+    handleInboundRemove(payload) {
+      const handle = registry.get(payload.id);
+      registry.delete(payload.id);
+      handle?.destroy();
+    }
+  };
+}
+
 // src/module/input/binding.ts
 var BUTTONS = {
   leftclick: 0,
@@ -168,11 +392,11 @@ function isObject(value) {
   return typeof value === "object" && value !== null;
 }
 function isWorldPosition(value) {
-  return isObject(value) && typeof value.x === "number" && typeof value.y === "number";
+  return isObject(value) && Number.isFinite(value.x) && Number.isFinite(value.y);
 }
 function isDisplayPayload(value) {
   if (!isObject(value)) return false;
-  return typeof value.id === "string" && typeof value.sceneId === "string" && typeof value.senderId === "string" && typeof value.kind === "string" && KINDS.has(value.kind) && isWorldPosition(value.position) && typeof value.color === "number" && typeof value.moveCanvas === "boolean" && (value.text === void 0 || typeof value.text === "string") && (value.tokenId === void 0 || typeof value.tokenId === "string");
+  return typeof value.id === "string" && typeof value.sceneId === "string" && typeof value.senderId === "string" && typeof value.kind === "string" && KINDS.has(value.kind) && isWorldPosition(value.position) && typeof value.color === "number" && Number.isFinite(value.color) && typeof value.moveCanvas === "boolean" && (value.text === void 0 || typeof value.text === "string") && (value.tokenId === void 0 || typeof value.tokenId === "string");
 }
 function isRemovePayload(value) {
   return isObject(value) && typeof value.id === "string" && typeof value.sceneId === "string";
@@ -191,7 +415,7 @@ function parseSocketMessage(raw) {
 // src/module/network/socket.ts
 function installSocket(config) {
   const socket = game.socket;
-  const { handlers, rateLimit, sceneIdProvider, selfIsGM } = config;
+  const { handlers, rateLimit, sceneIdProvider, isUserGM } = config;
   const onMessage = (raw) => {
     const message = parseSocketMessage(raw);
     if (!message) {
@@ -203,7 +427,7 @@ function installSocket(config) {
       return;
     }
     if (message.type === "displayPing") {
-      if (!rateLimit.allow(message.payload.senderId, false)) {
+      if (!rateLimit.allow(message.payload.senderId, isUserGM(message.payload.senderId))) {
         console.warn(
           `${MODULE_ID} | rate-limited inbound displayPing from ${message.payload.senderId}`
         );
@@ -218,7 +442,7 @@ function installSocket(config) {
   return {
     broadcast(message) {
       if (message.type === "displayPing") {
-        if (!rateLimit.allow(message.payload.senderId, selfIsGM())) {
+        if (!rateLimit.allow(message.payload.senderId, isUserGM(message.payload.senderId))) {
           return false;
         }
       }
@@ -231,114 +455,10 @@ function installSocket(config) {
   };
 }
 
-// src/module/render/animation.ts
-function runAnimation(container, config) {
-  const { durationMs, fadeInMs, fadeOutMs, update, onComplete } = config;
-  const ticker = canvas.app.ticker;
-  const startMs = performance.now();
-  const totalMs = fadeInMs + durationMs + fadeOutMs;
-  let canceled = false;
-  const tick = () => {
-    if (canceled) return;
-    const elapsed = performance.now() - startMs;
-    let alpha = 1;
-    if (elapsed < fadeInMs) {
-      alpha = elapsed / fadeInMs;
-    } else if (elapsed > fadeInMs + durationMs) {
-      const fadeOutElapsed = elapsed - fadeInMs - durationMs;
-      alpha = Math.max(0, 1 - fadeOutElapsed / fadeOutMs);
-    }
-    container.alpha = alpha;
-    update(elapsed);
-    if (elapsed >= totalMs) {
-      canceled = true;
-      ticker.remove(tick);
-      onComplete();
-    }
-  };
-  ticker.add(tick);
-  return () => {
-    if (canceled) return;
-    canceled = true;
-    ticker.remove(tick);
-  };
-}
-
-// src/module/render/graphics.ts
-var HERE_RING_COUNT = 3;
-var HERE_CYCLE_MS = 2e3;
-var HERE_LINE_WIDTH = 2;
-var HERE_BASE_ALPHA = 0.55;
-var HERE_INNER_RATIO = 0.15;
-function createHereVisual({ color, size }) {
-  const container = new PIXI.Container();
-  const outerR = size / 2;
-  const innerR = size * HERE_INNER_RATIO;
-  const rings = [];
-  for (let i = 0; i < HERE_RING_COUNT; i++) {
-    const ring = new PIXI.Graphics();
-    container.addChild(ring);
-    rings.push(ring);
-  }
-  function update(elapsedMs) {
-    for (let i = 0; i < HERE_RING_COUNT; i++) {
-      const phase = (elapsedMs / HERE_CYCLE_MS + i / HERE_RING_COUNT) % 1;
-      const radius = outerR + (innerR - outerR) * phase;
-      const alpha = HERE_BASE_ALPHA * (1 - phase * 0.85);
-      const ring = rings[i];
-      ring.clear();
-      ring.lineStyle(HERE_LINE_WIDTH, color, alpha);
-      ring.drawCircle(0, 0, radius);
-    }
-  }
-  update(0);
-  return { container, update };
-}
-function createPingVisual(kind, opts) {
-  switch (kind) {
-    case "here":
-      return createHereVisual(opts);
-    case "rally":
-    case "alert":
-    case "text":
-    case "token-attach":
-      throw new Error(`pings: visual for "${kind}" not yet implemented`);
-  }
-}
-
-// src/module/render/ping.ts
-function createPing(opts) {
-  const parent = canvas.controls.pings;
-  const visual = createPingVisual(opts.kind, { color: opts.color, size: opts.size });
-  visual.container.x = opts.position.x;
-  visual.container.y = opts.position.y;
-  visual.container.alpha = 0;
-  parent.addChild(visual.container);
-  let disposed = false;
-  const dispose = () => {
-    if (disposed) return;
-    disposed = true;
-    parent.removeChild(visual.container);
-    visual.container.destroy({ children: true });
-  };
-  const cancel = runAnimation(visual.container, {
-    durationMs: opts.durationMs,
-    fadeInMs: FADE_IN_MS,
-    fadeOutMs: FADE_OUT_MS,
-    update: visual.update,
-    onComplete: dispose
-  });
-  return {
-    destroy() {
-      cancel();
-      dispose();
-    }
-  };
-}
-
 // src/module/pings.ts
 var teardownTrigger = null;
 var socketHandle = null;
+var apiBundle = null;
 function resolveUserColor() {
   const c = game.user?.color;
   if (typeof c === "number") return c;
@@ -353,30 +473,8 @@ function resolveUserColor() {
   }
   return DEFAULT_PING_COLOR;
 }
-function displayPingFromPayload(payload) {
-  createPing({
-    kind: payload.kind,
-    position: payload.position,
-    color: payload.color,
-    size: canvas.dimensions.size,
-    durationMs: DEFAULT_PING_DURATION_MS
-  });
-}
 function onIntent(intent) {
-  const sceneId = canvas.scene?.id;
-  const senderId = game.user?.id;
-  if (!sceneId || !senderId || !socketHandle) return;
-  const payload = {
-    id: foundry.utils.randomID(),
-    sceneId,
-    senderId,
-    kind: intent.kind,
-    position: intent.position,
-    color: resolveUserColor(),
-    moveCanvas: false
-  };
-  const sent = socketHandle.broadcast({ type: "displayPing", payload });
-  if (sent) displayPingFromPayload(payload);
+  apiBundle?.api.here(intent.position);
 }
 function reinstallTrigger() {
   teardownTrigger?.();
@@ -398,21 +496,32 @@ Hooks.on("canvasTearDown", () => {
   teardownTrigger = null;
 });
 Hooks.once("ready", () => {
+  const version = game.modules?.get(MODULE_ID)?.version ?? "0.0.0";
+  apiBundle = createApi({
+    version,
+    sceneIdProvider: () => canvas.scene?.id ?? null,
+    senderIdProvider: () => game.user?.id ?? null,
+    senderColorProvider: resolveUserColor,
+    canvasSizeProvider: () => canvas.dimensions.size,
+    socketProvider: () => socketHandle
+  });
   socketHandle = installSocket({
     handlers: {
-      onDisplay: displayPingFromPayload,
-      onRemove: () => {
-      }
+      onDisplay: apiBundle.handleInboundDisplay,
+      onRemove: apiBundle.handleInboundRemove
     },
     rateLimit: createRateLimit({
       capacity: RATE_LIMIT_CAPACITY,
       windowMs: RATE_LIMIT_WINDOW_MS
     }),
     sceneIdProvider: () => canvas.scene?.id ?? null,
-    selfIsGM: () => game.user?.isGM ?? false
+    isUserGM: (userId) => game.users?.get(userId)?.isGM ?? false
   });
-  const version = game.modules?.get(MODULE_ID)?.version ?? "0.0.0";
-  const api = { version };
+  const api = apiBundle.api;
+  const moduleEntry = game.modules?.get(MODULE_ID);
+  if (moduleEntry) {
+    moduleEntry.api = api;
+  }
   const globals = window;
   globals.NonexIst = globals.NonexIst ?? {};
   globals.NonexIst.Pings = api;
