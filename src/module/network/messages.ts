@@ -36,7 +36,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function isWorldPosition(value: unknown): value is WorldPosition {
-    return isObject(value) && typeof value.x === 'number' && typeof value.y === 'number';
+    return isObject(value) && Number.isFinite(value.x) && Number.isFinite(value.y);
 }
 
 function isDisplayPayload(value: unknown): value is DisplayPingPayload {
@@ -49,6 +49,7 @@ function isDisplayPayload(value: unknown): value is DisplayPingPayload {
         KINDS.has(value.kind as PingKind) &&
         isWorldPosition(value.position) &&
         typeof value.color === 'number' &&
+        Number.isFinite(value.color) &&
         typeof value.moveCanvas === 'boolean' &&
         (value.text === undefined || typeof value.text === 'string') &&
         (value.tokenId === undefined || typeof value.tokenId === 'string')

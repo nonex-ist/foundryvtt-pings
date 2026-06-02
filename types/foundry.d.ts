@@ -100,6 +100,7 @@ interface FoundrySocket {
 
 interface FoundryGame {
     user?: FoundryUser;
+    users?: { get(id: string): FoundryUser | undefined };
     modules?: { get(id: string): FoundryGameModule | undefined };
     socket?: FoundrySocket;
 }

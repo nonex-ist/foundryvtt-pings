@@ -118,7 +118,7 @@ Hooks.once('ready', () => {
             windowMs: RATE_LIMIT_WINDOW_MS,
         }),
         sceneIdProvider: () => canvas.scene?.id ?? null,
-        selfIsGM: () => game.user?.isGM ?? false,
+        isUserGM: (userId) => game.users?.get(userId)?.isGM ?? false,
     });
 
     const version = game.modules?.get(MODULE_ID)?.version ?? '0.0.0';

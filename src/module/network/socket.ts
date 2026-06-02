@@ -18,8 +18,13 @@ export interface InstallSocketConfig {
     rateLimit: RateLimit;
     /** Returns the current scene id, or null if no scene is active. */
     sceneIdProvider(): string | null;
-    /** Returns true if the *local* user is a GM (for sender-side bypass). */
-    selfIsGM(): boolean;
+    /**
+     * Returns true if the given user id belongs to a GM. Used on both
+     * sides of the socket so the rate-limit's GM bypass applies whether
+     * the sender is local or remote. Receivers resolve this from their
+     * own `game.users` rather than trusting a payload flag.
+     */
+    isUserGM(userId: string): boolean;
 }
 
 export interface SocketHandle {
@@ -47,7 +52,7 @@ export interface SocketHandle {
  */
 export function installSocket(config: InstallSocketConfig): SocketHandle {
     const socket = game.socket;
-    const { handlers, rateLimit, sceneIdProvider, selfIsGM } = config;
+    const { handlers, rateLimit, sceneIdProvider, isUserGM } = config;
 
     const onMessage = (raw: unknown): void => {
         const message = parseSocketMessage(raw);
@@ -62,7 +67,7 @@ export function installSocket(config: InstallSocketConfig): SocketHandle {
         }
 
         if (message.type === 'displayPing') {
-            if (!rateLimit.allow(message.payload.senderId, false)) {
+            if (!rateLimit.allow(message.payload.senderId, isUserGM(message.payload.senderId))) {
                 console.warn(
                     `${MODULE_ID} | rate-limited inbound displayPing from ${message.payload.senderId}`,
                 );
@@ -79,7 +84,7 @@ export function installSocket(config: InstallSocketConfig): SocketHandle {
     return {
         broadcast(message) {
             if (message.type === 'displayPing') {
-                if (!rateLimit.allow(message.payload.senderId, selfIsGM())) {
+                if (!rateLimit.allow(message.payload.senderId, isUserGM(message.payload.senderId))) {
                     return false;
                 }
             }
