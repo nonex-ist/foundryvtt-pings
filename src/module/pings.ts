@@ -12,6 +12,8 @@
  */
 
 import { createApi, type ApiBundle, type PingsApi } from './api/index.js';
+import { createAudioController } from './audio/play.js';
+import type { DisplayPingPayload } from './network/messages.js';
 import {
     DEFAULT_PING_COLOR,
     HOLD_CANCEL_TOLERANCE_PX,
@@ -123,6 +125,12 @@ Hooks.on('canvasTearDown', () => {
 
 Hooks.once('ready', () => {
     const version = game.modules?.get(MODULE_ID)?.version ?? '0.0.0';
+
+    const audio = createAudioController();
+    Hooks.on('pings.display', (_handle: unknown, payload: unknown) => {
+        const kind = (payload as DisplayPingPayload | undefined)?.kind;
+        if (kind) audio.play(kind);
+    });
 
     apiBundle = createApi({
         version,

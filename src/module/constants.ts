@@ -32,3 +32,9 @@ export const MIN_ALERT_ROLE = 3; // ASSISTANT — sender role gate for alert pin
 
 export const RATE_LIMIT_CAPACITY = 3;
 export const RATE_LIMIT_WINDOW_MS = 5000;
+
+/** Audio defaults — M8 will promote to client settings. */
+export const AUDIO_ENABLED_DEFAULT = true;
+export const AUDIO_VOLUME_DEFAULT = 0.5;
+/** Path is relative to Foundry's data root once the module is installed. */
+export const AUDIO_PATH_PREFIX = `modules/${MODULE_ID}/sounds`;
