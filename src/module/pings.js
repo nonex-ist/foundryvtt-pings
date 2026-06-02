@@ -756,7 +756,7 @@ function pickKindFromDelta(deltaX, deltaY, deadzonePx) {
 var SEGMENT_RADIUS_PX = 70;
 function openRadialMenu(opts) {
   const root = document.createElement("div");
-  root.className = "pings-radial-menu";
+  root.className = "pings-radial-menu pings-radial-menu--passive";
   root.style.left = `${opts.clientX}px`;
   root.style.top = `${opts.clientY}px`;
   const center = document.createElement("div");
@@ -776,22 +776,45 @@ function openRadialMenu(opts) {
     segments.set(seg.kind, el);
   }
   document.body.appendChild(root);
+  let active = false;
   let currentHighlight = null;
-  const highlight = (kind) => {
-    if (currentHighlight === kind) return;
+  const clearHighlight = () => {
     if (currentHighlight !== null) {
       segments.get(currentHighlight)?.classList.remove("pings-radial-active");
+      currentHighlight = null;
     }
+  };
+  const highlight = (kind) => {
+    if (!active) return;
+    if (currentHighlight === kind) return;
+    clearHighlight();
     segments.get(kind)?.classList.add("pings-radial-active");
     currentHighlight = kind;
   };
-  highlight("here");
   return {
+    setActive(value) {
+      if (active === value) return;
+      active = value;
+      if (active) {
+        root.classList.remove("pings-radial-menu--passive");
+      } else {
+        root.classList.add("pings-radial-menu--passive");
+        clearHighlight();
+      }
+    },
     onCursorMove(clientX, clientY) {
-      highlight(pickKindFromDelta(clientX - opts.clientX, clientY - opts.clientY, opts.deadzonePx));
+      if (!active) return;
+      highlight(
+        pickKindFromDelta(clientX - opts.clientX, clientY - opts.clientY, opts.deadzonePx)
+      );
     },
     getSelectedKind(clientX, clientY) {
-      return pickKindFromDelta(clientX - opts.clientX, clientY - opts.clientY, opts.deadzonePx);
+      if (!active) return "here";
+      return pickKindFromDelta(
+        clientX - opts.clientX,
+        clientY - opts.clientY,
+        opts.deadzonePx
+      );
     },
     destroy() {
       root.remove();
@@ -832,7 +855,12 @@ function installTrigger(config) {
       if (!hold || hold.pointerId !== pointerId || hold.phase !== "holding") return;
       hold.phase = "preview";
       hold.timerId = null;
-      hold.previewDispose = config.callbacks.showPreview(startWorld);
+      const bundle = config.callbacks.showPreview(startWorld, {
+        x: startClientX,
+        y: startClientY
+      });
+      hold.previewDispose = bundle.previewDispose;
+      hold.menu = bundle.menu;
     }, config.holdDurationMs);
     hold = {
       phase: "holding",
@@ -858,14 +886,9 @@ function installTrigger(config) {
     }
     if (hold.phase === "preview") {
       if (distSq >= config.menuSummonPx * config.menuSummonPx) {
-        hold.previewDispose?.();
-        hold.previewDispose = null;
-        hold.menu = config.callbacks.openMenu(
-          { x: hold.startClientX, y: hold.startClientY },
-          hold.startWorld
-        );
+        hold.menu?.setActive(true);
+        hold.menu?.onCursorMove(ev.clientX, ev.clientY);
         hold.phase = "menu";
-        hold.menu.onCursorMove(ev.clientX, ev.clientY);
       }
       return;
     }
@@ -1050,15 +1073,23 @@ function findTokenIdAt(position) {
   }
   return null;
 }
-function showPreviewPing(position) {
+function showPreviewBundle(worldPosition, clientPosition) {
   const handle = createPing({
     kind: "here",
-    position,
+    position: worldPosition,
     color: resolveUserColor(),
     size: canvas.dimensions.size,
     durationMs: KIND_DEFAULT_DURATION_MS.here
   });
-  return () => handle.destroy();
+  const menu = openRadialMenu({
+    clientX: clientPosition.x,
+    clientY: clientPosition.y,
+    deadzonePx: getMenuSummonPx()
+  });
+  return {
+    previewDispose: () => handle.destroy(),
+    menu
+  };
 }
 function commitPing(kind, position, previewDispose) {
   if (!apiBundle) {
@@ -1098,19 +1129,13 @@ function reinstallTrigger() {
     console.warn(`${MODULE_ID} | invalid trigger binding, falling back to LeftClick`, err);
     binding = parseBinding("LeftClick");
   }
-  const menuPx = getMenuSummonPx();
   teardownTrigger = installTrigger({
     binding,
     holdDurationMs: getHoldDurationMs(),
     holdCancelTolerancePx: getHoldCancelTolerancePx(),
-    menuSummonPx: menuPx,
+    menuSummonPx: getMenuSummonPx(),
     callbacks: {
-      showPreview: showPreviewPing,
-      openMenu: (clientPosition) => openRadialMenu({
-        clientX: clientPosition.x,
-        clientY: clientPosition.y,
-        deadzonePx: menuPx
-      }),
+      showPreview: showPreviewBundle,
       commit: commitPing
     }
   });

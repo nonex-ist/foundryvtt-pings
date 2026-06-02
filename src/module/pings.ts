@@ -61,7 +61,10 @@ function findTokenIdAt(position: WorldPosition): string | null {
     return null;
 }
 
-function showPreviewPing(position: WorldPosition): () => void {
+function showPreviewBundle(
+    worldPosition: WorldPosition,
+    clientPosition: { x: number; y: number },
+): { previewDispose: () => void; menu: ReturnType<typeof openRadialMenu> } {
     // Bypass the API on purpose: the preview is a visual-only indicator
     // ("you're about to ping"), not a committed ping, so it must NOT fire
     // the `pings.display` hook (which would trigger audio + any other
@@ -70,12 +73,23 @@ function showPreviewPing(position: WorldPosition): () => void {
     // commit path instead.
     const handle = createPing({
         kind: 'here',
-        position,
+        position: worldPosition,
         color: resolveUserColor(),
         size: canvas.dimensions.size,
         durationMs: KIND_DEFAULT_DURATION_MS.here,
     });
-    return () => handle.destroy();
+    // Open the radial menu in passive mode at the press point — it acts as
+    // an "options available" hint during the hold, before the user has
+    // committed to either the default here-ping or a menu kind.
+    const menu = openRadialMenu({
+        clientX: clientPosition.x,
+        clientY: clientPosition.y,
+        deadzonePx: getMenuSummonPx(),
+    });
+    return {
+        previewDispose: () => handle.destroy(),
+        menu,
+    };
 }
 
 function commitPing(
@@ -135,20 +149,13 @@ function reinstallTrigger(): void {
         console.warn(`${MODULE_ID} | invalid trigger binding, falling back to LeftClick`, err);
         binding = parseBinding('LeftClick');
     }
-    const menuPx = getMenuSummonPx();
     teardownTrigger = installTrigger({
         binding,
         holdDurationMs: getHoldDurationMs(),
         holdCancelTolerancePx: getHoldCancelTolerancePx(),
-        menuSummonPx: menuPx,
+        menuSummonPx: getMenuSummonPx(),
         callbacks: {
-            showPreview: showPreviewPing,
-            openMenu: (clientPosition) =>
-                openRadialMenu({
-                    clientX: clientPosition.x,
-                    clientY: clientPosition.y,
-                    deadzonePx: menuPx,
-                }),
+            showPreview: showPreviewBundle,
             commit: commitPing,
         },
     });

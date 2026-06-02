@@ -6,8 +6,17 @@
  * via the --pings-tx / --pings-ty custom properties set in radial-menu.ts
  * (cardinal layout + center deadzone). Positioning lives in CSS so the
  * active-state highlight can compose translate() with scale() without an
- * inline transform overriding it. The active segment is highlighted via a
- * class swap. */
+ * inline transform overriding it.
+ *
+ * Modes:
+ *   .pings-radial-menu--passive  — opens-with default, dim + smaller,
+ *                                   reads as "menu is available, drag to
+ *                                   select"; no highlight tracking
+ *   (default state)              — active mode, full opacity + scale,
+ *                                   highlight follows the cursor
+ *   .pings-radial-active         — applied to the segment under the
+ *                                   cursor (active mode only) */
+
 .pings-radial-menu {
     position: fixed;
     top: 0;
@@ -36,7 +45,13 @@
     text-align: center;
     border: 1px solid rgba(255, 255, 255, 0.2);
     transform: translate(var(--pings-tx, 0), var(--pings-ty, 0));
-    transition: background-color 80ms ease-out, transform 80ms ease-out;
+    transition: background-color 120ms ease-out, transform 120ms ease-out,
+        opacity 120ms ease-out;
+}
+
+.pings-radial-menu--passive .pings-radial-segment {
+    opacity: 0.45;
+    transform: translate(var(--pings-tx, 0), var(--pings-ty, 0)) scale(0.85);
 }
 
 .pings-radial-segment.pings-radial-active {

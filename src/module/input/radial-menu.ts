@@ -46,9 +46,20 @@ export function pickKindFromDelta(
 }
 
 export interface MenuController {
-    /** Update the highlighted segment based on the cursor's client-pixel position. */
+    /**
+     * Toggle between passive (discovery hint) and active (interactive)
+     * modes. Passive: dimmer + smaller + no highlight tracking; signals
+     * "menu is available, drag to select". Active: full opacity +
+     * highlight follows cursor; signals "you're picking a segment".
+     */
+    setActive(active: boolean): void;
+    /** Update the highlighted segment based on the cursor's client-pixel position. No-op while passive. */
     onCursorMove(clientX: number, clientY: number): void;
-    /** Resolve the kind to commit on release for the given cursor position. */
+    /**
+     * Resolve the kind to commit on release for the given cursor
+     * position. Passive menu always commits "here" (the user never
+     * armed the menu).
+     */
     getSelectedKind(clientX: number, clientY: number): PingKind;
     destroy(): void;
 }
@@ -66,16 +77,20 @@ const SEGMENT_RADIUS_PX = 70;
 /**
  * Open the radial menu as a DOM overlay anchored at the press position.
  *
- * The overlay is a fixed-position container with `pointer-events: none` so
- * pointer events still reach the canvas underneath — the trigger remains
- * the single source of truth for cursor tracking and release.
+ * Opens in **passive** mode by default — chips visible but dimmer and
+ * smaller, with no highlight tracking. The trigger calls `setActive(true)`
+ * once the user has dragged past the menu-summon threshold; until then,
+ * the menu reads as a discovery hint ("you can drag toward one of these")
+ * rather than as a UI element actively responding to input.
  *
- * Hit-test runs in client (CSS) pixels so the user's drag distance maps
- * directly onto what they see, independent of canvas zoom.
+ * The overlay is fixed-position with `pointer-events: none` so the canvas
+ * underneath keeps receiving the gesture. Hit-test runs in client (CSS)
+ * pixels so drag distance maps directly to what the user sees,
+ * independent of canvas zoom.
  */
 export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     const root = document.createElement('div');
-    root.className = 'pings-radial-menu';
+    root.className = 'pings-radial-menu pings-radial-menu--passive';
     root.style.left = `${opts.clientX}px`;
     root.style.top = `${opts.clientY}px`;
 
@@ -104,24 +119,48 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
 
     document.body.appendChild(root);
 
+    let active = false;
     let currentHighlight: PingKind | null = null;
-    const highlight = (kind: PingKind): void => {
-        if (currentHighlight === kind) return;
+
+    const clearHighlight = (): void => {
         if (currentHighlight !== null) {
             segments.get(currentHighlight)?.classList.remove('pings-radial-active');
+            currentHighlight = null;
         }
+    };
+
+    const highlight = (kind: PingKind): void => {
+        if (!active) return;
+        if (currentHighlight === kind) return;
+        clearHighlight();
         segments.get(kind)?.classList.add('pings-radial-active');
         currentHighlight = kind;
     };
 
-    highlight('here');
-
     return {
+        setActive(value) {
+            if (active === value) return;
+            active = value;
+            if (active) {
+                root.classList.remove('pings-radial-menu--passive');
+            } else {
+                root.classList.add('pings-radial-menu--passive');
+                clearHighlight();
+            }
+        },
         onCursorMove(clientX, clientY) {
-            highlight(pickKindFromDelta(clientX - opts.clientX, clientY - opts.clientY, opts.deadzonePx));
+            if (!active) return;
+            highlight(
+                pickKindFromDelta(clientX - opts.clientX, clientY - opts.clientY, opts.deadzonePx),
+            );
         },
         getSelectedKind(clientX, clientY) {
-            return pickKindFromDelta(clientX - opts.clientX, clientY - opts.clientY, opts.deadzonePx);
+            if (!active) return 'here';
+            return pickKindFromDelta(
+                clientX - opts.clientX,
+                clientY - opts.clientY,
+                opts.deadzonePx,
+            );
         },
         destroy() {
             root.remove();
