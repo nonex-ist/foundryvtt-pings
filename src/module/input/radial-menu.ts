@@ -84,6 +84,14 @@ export interface OpenRadialMenuOptions {
     deadzonePx: number;
     /** The local user's color (0xRRGGBB). Used to tint chips whose outcome ping is user-colored (here / text / token-attach). */
     userColor: number;
+    /**
+     * Kinds that are unavailable in the current context (e.g. token-attach
+     * with no token at the press point). Disabled segments are visually
+     * greyed-out; cursor-over them highlights the center "Ping" instead;
+     * release on them falls back to "here". The kind itself is never
+     * returned from `getSelectedKind`.
+     */
+    disabledKinds?: ReadonlyArray<PingKind>;
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -147,6 +155,8 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     // visual mirrors what the resulting ping will look like.
     root.style.setProperty('--pings-user-color', colorToHex(opts.userColor));
 
+    const disabledKinds = new Set<PingKind>(opts.disabledKinds ?? []);
+
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('class', 'pings-radial-svg');
     svg.setAttribute('width', `${SVG_SIZE_PX}`);
@@ -163,7 +173,9 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     // and the labels can sit on top of everything).
     for (const seg of RADIAL_SEGMENTS) {
         const path = document.createElementNS(SVG_NS, 'path');
-        path.setAttribute('class', 'pings-radial-segment');
+        let className = 'pings-radial-segment';
+        if (disabledKinds.has(seg.kind)) className += ' pings-radial-disabled';
+        path.setAttribute('class', className);
         path.dataset.kind = seg.kind;
         const half = Math.PI / 4;
         path.setAttribute(
@@ -192,7 +204,9 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     // Labels go last so they're not clipped by sibling fills.
     for (const seg of RADIAL_SEGMENTS) {
         const label = document.createElementNS(SVG_NS, 'text');
-        label.setAttribute('class', 'pings-radial-label');
+        let labelClass = 'pings-radial-label';
+        if (disabledKinds.has(seg.kind)) labelClass += ' pings-radial-disabled';
+        label.setAttribute('class', labelClass);
         label.setAttribute('x', `${LABEL_RADIUS_PX * Math.cos(seg.angleCenter)}`);
         label.setAttribute('y', `${LABEL_RADIUS_PX * Math.sin(seg.angleCenter)}`);
         label.setAttribute('text-anchor', 'middle');
@@ -224,11 +238,14 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
 
     const highlight = (kind: PingKind): void => {
         if (!active) return;
-        if (currentHighlight === kind) return;
+        // Cursor over a disabled segment lights the center instead — the
+        // user sees the fallback they'd actually commit on release.
+        const effective: PingKind = disabledKinds.has(kind) ? 'here' : kind;
+        if (currentHighlight === effective) return;
         clearHighlight();
-        const el = segments.get(kind);
+        const el = segments.get(effective);
         if (el) el.classList.add('pings-radial-active');
-        currentHighlight = kind;
+        currentHighlight = effective;
     };
 
     return {
@@ -250,11 +267,12 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
         },
         getSelectedKind(clientX, clientY) {
             if (!active) return 'here';
-            return pickKindFromDelta(
+            const picked = pickKindFromDelta(
                 clientX - opts.clientX,
                 clientY - opts.clientY,
                 opts.deadzonePx,
             );
+            return disabledKinds.has(picked) ? 'here' : picked;
         },
         destroy() {
             root.remove();

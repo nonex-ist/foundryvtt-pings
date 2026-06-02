@@ -858,6 +858,7 @@ function openRadialMenu(opts) {
   root.style.left = `${opts.clientX}px`;
   root.style.top = `${opts.clientY}px`;
   root.style.setProperty("--pings-user-color", colorToHex(opts.userColor));
+  const disabledKinds = new Set(opts.disabledKinds ?? []);
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("class", "pings-radial-svg");
   svg.setAttribute("width", `${SVG_SIZE_PX}`);
@@ -870,7 +871,9 @@ function openRadialMenu(opts) {
   const segments = /* @__PURE__ */ new Map();
   for (const seg of RADIAL_SEGMENTS) {
     const path = document.createElementNS(SVG_NS, "path");
-    path.setAttribute("class", "pings-radial-segment");
+    let className = "pings-radial-segment";
+    if (disabledKinds.has(seg.kind)) className += " pings-radial-disabled";
+    path.setAttribute("class", className);
     path.dataset.kind = seg.kind;
     const half = Math.PI / 4;
     path.setAttribute(
@@ -895,7 +898,9 @@ function openRadialMenu(opts) {
   segments.set("here", center);
   for (const seg of RADIAL_SEGMENTS) {
     const label = document.createElementNS(SVG_NS, "text");
-    label.setAttribute("class", "pings-radial-label");
+    let labelClass = "pings-radial-label";
+    if (disabledKinds.has(seg.kind)) labelClass += " pings-radial-disabled";
+    label.setAttribute("class", labelClass);
     label.setAttribute("x", `${LABEL_RADIUS_PX * Math.cos(seg.angleCenter)}`);
     label.setAttribute("y", `${LABEL_RADIUS_PX * Math.sin(seg.angleCenter)}`);
     label.setAttribute("text-anchor", "middle");
@@ -923,11 +928,12 @@ function openRadialMenu(opts) {
   };
   const highlight = (kind) => {
     if (!active) return;
-    if (currentHighlight === kind) return;
+    const effective = disabledKinds.has(kind) ? "here" : kind;
+    if (currentHighlight === effective) return;
     clearHighlight();
-    const el = segments.get(kind);
+    const el = segments.get(effective);
     if (el) el.classList.add("pings-radial-active");
-    currentHighlight = kind;
+    currentHighlight = effective;
   };
   return {
     setActive(value) {
@@ -948,11 +954,12 @@ function openRadialMenu(opts) {
     },
     getSelectedKind(clientX, clientY) {
       if (!active) return "here";
-      return pickKindFromDelta(
+      const picked = pickKindFromDelta(
         clientX - opts.clientX,
         clientY - opts.clientY,
         opts.deadzonePx
       );
+      return disabledKinds.has(picked) ? "here" : picked;
     },
     destroy() {
       root.remove();
@@ -1224,11 +1231,13 @@ function showPreviewBundle(worldPosition, clientPosition) {
     size: canvas.dimensions.size,
     durationMs: KIND_DEFAULT_DURATION_MS.here
   });
+  const disabledKinds = findTokenIdAt(worldPosition) ? [] : ["token-attach"];
   const menu = openRadialMenu({
     clientX: clientPosition.x,
     clientY: clientPosition.y,
     deadzonePx: getMenuSummonPx(),
-    userColor: resolveUserColor()
+    userColor: resolveUserColor(),
+    disabledKinds
   });
   return {
     previewDispose: () => handle.destroy(),

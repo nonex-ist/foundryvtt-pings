@@ -78,6 +78,12 @@ function showPreviewBundle(
         size: canvas.dimensions.size,
         durationMs: KIND_DEFAULT_DURATION_MS.here,
     });
+    // Token segment is unavailable when there's no token at the press
+    // point — the menu greys it out and falls back to 'here' on release.
+    const disabledKinds: PingKind[] = findTokenIdAt(worldPosition)
+        ? []
+        : ['token-attach'];
+
     // Open the radial menu in passive mode at the press point — it acts as
     // an "options available" hint during the hold, before the user has
     // committed to either the default here-ping or a menu kind.
@@ -86,6 +92,7 @@ function showPreviewBundle(
         clientY: clientPosition.y,
         deadzonePx: getMenuSummonPx(),
         userColor: resolveUserColor(),
+        disabledKinds,
     });
     return {
         previewDispose: () => handle.destroy(),

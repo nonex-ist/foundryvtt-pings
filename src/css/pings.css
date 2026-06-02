@@ -71,6 +71,19 @@
     filter: drop-shadow(0 0 10px var(--chip-bg));
 }
 
+/* Disabled segment: greyed-out fill, dim label. Cursor-over it lights
+ * the center 'Ping' chip instead so the user sees the fallback. */
+.pings-radial-segment.pings-radial-disabled {
+    --chip-bg: #555;
+    fill: var(--chip-bg);
+    opacity: 0.45;
+}
+
+.pings-radial-label.pings-radial-disabled {
+    fill: rgba(255, 255, 255, 0.55);
+    opacity: 0.7;
+}
+
 .pings-radial-label {
     fill: #ffffff;
     font-family: "Signika", sans-serif;
