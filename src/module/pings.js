@@ -934,10 +934,6 @@ function installTrigger(config) {
       previewDispose: null,
       menu: null
     };
-    config.callbacks.onPressMatched?.(startWorld, {
-      x: startClientX,
-      y: startClientY
-    });
   };
   const onPointerMove = (ev) => {
     if (!hold || hold.pointerId !== ev.pointerId) return;
@@ -972,7 +968,6 @@ function installTrigger(config) {
     const previewDispose = hold.previewDispose;
     hold.previewDispose = null;
     reset();
-    config.callbacks.onReleaseMatched?.();
     if (commitKind !== null) {
       config.callbacks.commit(commitKind, commitPosition, previewDispose);
     } else if (previewDispose) {
@@ -982,7 +977,6 @@ function installTrigger(config) {
   const onPointerCancel = (ev) => {
     if (!hold || hold.pointerId !== ev.pointerId) return;
     reset();
-    config.callbacks.onReleaseMatched?.();
   };
   view.addEventListener("pointerdown", onPointerDown);
   view.addEventListener("pointermove", onPointerMove);
