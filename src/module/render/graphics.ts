@@ -225,43 +225,75 @@ function createTextVisual({ color, text }: VisualOptions): PingVisual {
 
 // ── token-attach ──────────────────────────────────────────────────
 
-const TOKEN_BRACKET_LINE_WIDTH = 3;
+const TOKEN_FRAME_COUNT = 3;
+const TOKEN_CYCLE_MS = 1400;
+const TOKEN_LINE_WIDTH = 3;
+const TOKEN_BASE_ALPHA = 0.95;
+const TOKEN_OUTER_RATIO = 0.55;
+const TOKEN_INNER_RATIO = 0.22;
+const TOKEN_ARM_RATIO = 0.18;
 
 /**
- * "Token-attach" ping: four corner brackets framing the followed token.
+ * "Token-attach" ping: four corner brackets framing the followed token,
+ * continuously contracting inward like a closing reticle. Three
+ * staggered frames sweep from the outer corner-offset to the inner
+ * offset and fade, so at any moment at least one frame is mid-travel —
+ * the eye reads "marked / locked, hands off". Movement of the token is
+ * blocked while the ping is active (handled by the api layer).
+ *
  * The container's x/y is updated each frame by `createPing`'s position
- * provider so the brackets stay locked to the moving token. Static visual
- * (no rotation/pulse) so the underlying token remains the focus.
+ * provider so the brackets stay locked to the moving token even
+ * mid-animation.
  */
 function createTokenAttachVisual({ color, size }: VisualOptions): PingVisual {
     const container = new PIXI.Container();
-    const cornerOffset = size * 0.5;
-    const armLength = size * 0.2;
+    const outerOffset = size * TOKEN_OUTER_RATIO;
+    const innerOffset = size * TOKEN_INNER_RATIO;
+    const baseArmLen = size * TOKEN_ARM_RATIO;
 
-    const brackets = new PIXI.Graphics();
-    brackets.lineStyle(TOKEN_BRACKET_LINE_WIDTH, color, 0.95);
-    // Top-left.
-    brackets.moveTo(-cornerOffset, -cornerOffset + armLength);
-    brackets.lineTo(-cornerOffset, -cornerOffset);
-    brackets.lineTo(-cornerOffset + armLength, -cornerOffset);
-    // Top-right.
-    brackets.moveTo(cornerOffset - armLength, -cornerOffset);
-    brackets.lineTo(cornerOffset, -cornerOffset);
-    brackets.lineTo(cornerOffset, -cornerOffset + armLength);
-    // Bottom-right.
-    brackets.moveTo(cornerOffset, cornerOffset - armLength);
-    brackets.lineTo(cornerOffset, cornerOffset);
-    brackets.lineTo(cornerOffset - armLength, cornerOffset);
-    // Bottom-left.
-    brackets.moveTo(-cornerOffset + armLength, cornerOffset);
-    brackets.lineTo(-cornerOffset, cornerOffset);
-    brackets.lineTo(-cornerOffset, cornerOffset - armLength);
-    container.addChild(brackets);
-
-    function update(_elapsedMs: number): void {
-        // Position-follow happens externally via createPing's positionProvider.
+    const frames: PixiGraphics[] = [];
+    for (let i = 0; i < TOKEN_FRAME_COUNT; i++) {
+        const g = new PIXI.Graphics();
+        container.addChild(g);
+        frames.push(g);
     }
 
+    function drawFrame(g: PixiGraphics, offset: number, alpha: number): void {
+        // Clamp arm length so it never overshoots the bracket's own
+        // corner — keeps the shape readable as the frame contracts.
+        const armLen = Math.min(baseArmLen, offset * 0.7);
+        g.clear();
+        g.lineStyle(TOKEN_LINE_WIDTH, color, alpha);
+        // Top-left
+        g.moveTo(-offset, -offset + armLen);
+        g.lineTo(-offset, -offset);
+        g.lineTo(-offset + armLen, -offset);
+        // Top-right
+        g.moveTo(offset - armLen, -offset);
+        g.lineTo(offset, -offset);
+        g.lineTo(offset, -offset + armLen);
+        // Bottom-right
+        g.moveTo(offset, offset - armLen);
+        g.lineTo(offset, offset);
+        g.lineTo(offset - armLen, offset);
+        // Bottom-left
+        g.moveTo(-offset + armLen, offset);
+        g.lineTo(-offset, offset);
+        g.lineTo(-offset, offset - armLen);
+    }
+
+    function update(elapsedMs: number): void {
+        for (let i = 0; i < TOKEN_FRAME_COUNT; i++) {
+            const phase = ((elapsedMs / TOKEN_CYCLE_MS) + i / TOKEN_FRAME_COUNT) % 1;
+            const offset = outerOffset - (outerOffset - innerOffset) * phase;
+            // Quick fade-in (0–15%), fade out across remainder.
+            const fade = phase < 0.15 ? phase / 0.15 : 1 - (phase - 0.15) / 0.85;
+            const alpha = TOKEN_BASE_ALPHA * fade;
+            drawFrame(frames[i], offset, alpha);
+        }
+    }
+
+    update(0);
     return { container, update };
 }
 

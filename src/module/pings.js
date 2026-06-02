@@ -362,28 +362,51 @@ function createTextVisual({ color, text }) {
   }
   return { container, update };
 }
-var TOKEN_BRACKET_LINE_WIDTH = 3;
+var TOKEN_FRAME_COUNT = 3;
+var TOKEN_CYCLE_MS = 1400;
+var TOKEN_LINE_WIDTH = 3;
+var TOKEN_BASE_ALPHA = 0.95;
+var TOKEN_OUTER_RATIO = 0.55;
+var TOKEN_INNER_RATIO = 0.22;
+var TOKEN_ARM_RATIO = 0.18;
 function createTokenAttachVisual({ color, size }) {
   const container = new PIXI.Container();
-  const cornerOffset = size * 0.5;
-  const armLength = size * 0.2;
-  const brackets = new PIXI.Graphics();
-  brackets.lineStyle(TOKEN_BRACKET_LINE_WIDTH, color, 0.95);
-  brackets.moveTo(-cornerOffset, -cornerOffset + armLength);
-  brackets.lineTo(-cornerOffset, -cornerOffset);
-  brackets.lineTo(-cornerOffset + armLength, -cornerOffset);
-  brackets.moveTo(cornerOffset - armLength, -cornerOffset);
-  brackets.lineTo(cornerOffset, -cornerOffset);
-  brackets.lineTo(cornerOffset, -cornerOffset + armLength);
-  brackets.moveTo(cornerOffset, cornerOffset - armLength);
-  brackets.lineTo(cornerOffset, cornerOffset);
-  brackets.lineTo(cornerOffset - armLength, cornerOffset);
-  brackets.moveTo(-cornerOffset + armLength, cornerOffset);
-  brackets.lineTo(-cornerOffset, cornerOffset);
-  brackets.lineTo(-cornerOffset, cornerOffset - armLength);
-  container.addChild(brackets);
-  function update(_elapsedMs) {
+  const outerOffset = size * TOKEN_OUTER_RATIO;
+  const innerOffset = size * TOKEN_INNER_RATIO;
+  const baseArmLen = size * TOKEN_ARM_RATIO;
+  const frames = [];
+  for (let i = 0; i < TOKEN_FRAME_COUNT; i++) {
+    const g = new PIXI.Graphics();
+    container.addChild(g);
+    frames.push(g);
   }
+  function drawFrame(g, offset, alpha) {
+    const armLen = Math.min(baseArmLen, offset * 0.7);
+    g.clear();
+    g.lineStyle(TOKEN_LINE_WIDTH, color, alpha);
+    g.moveTo(-offset, -offset + armLen);
+    g.lineTo(-offset, -offset);
+    g.lineTo(-offset + armLen, -offset);
+    g.moveTo(offset - armLen, -offset);
+    g.lineTo(offset, -offset);
+    g.lineTo(offset, -offset + armLen);
+    g.moveTo(offset, offset - armLen);
+    g.lineTo(offset, offset);
+    g.lineTo(offset - armLen, offset);
+    g.moveTo(-offset + armLen, offset);
+    g.lineTo(-offset, offset);
+    g.lineTo(-offset, offset - armLen);
+  }
+  function update(elapsedMs) {
+    for (let i = 0; i < TOKEN_FRAME_COUNT; i++) {
+      const phase = (elapsedMs / TOKEN_CYCLE_MS + i / TOKEN_FRAME_COUNT) % 1;
+      const offset = outerOffset - (outerOffset - innerOffset) * phase;
+      const fade = phase < 0.15 ? phase / 0.15 : 1 - (phase - 0.15) / 0.85;
+      const alpha = TOKEN_BASE_ALPHA * fade;
+      drawFrame(frames[i], offset, alpha);
+    }
+  }
+  update(0);
   return { container, update };
 }
 function createPingVisual(kind, opts) {
@@ -499,12 +522,34 @@ function isCurrentSceneDisabled() {
 }
 function createApi(config) {
   const registry = /* @__PURE__ */ new Map();
+  const attachedTokens = /* @__PURE__ */ new Map();
+  const trackAttach = (tokenId) => {
+    attachedTokens.set(tokenId, (attachedTokens.get(tokenId) ?? 0) + 1);
+  };
+  const untrackAttach = (tokenId) => {
+    const next = (attachedTokens.get(tokenId) ?? 0) - 1;
+    if (next <= 0) attachedTokens.delete(tokenId);
+    else attachedTokens.set(tokenId, next);
+  };
+  Hooks.on("preUpdateToken", (...args) => {
+    const tokenDoc = args[0];
+    const changes = args[1];
+    if (!tokenDoc?.id || !changes) return void 0;
+    const moves = changes.x !== void 0 || changes.y !== void 0 || changes.rotation !== void 0;
+    if (!moves) return void 0;
+    if (!attachedTokens.has(tokenDoc.id)) return void 0;
+    ui.notifications?.warn(
+      `Pings: ${tokenDoc.name ?? "token"} is marked \u2014 movement blocked until the marker fades.`
+    );
+    return false;
+  });
   function displayLocally(payload) {
     let positionProvider;
     if (payload.kind === "token-attach" && payload.tokenId) {
       const tokenId = payload.tokenId;
       const fallback = payload.position;
       positionProvider = () => canvas.tokens?.get(tokenId)?.center ?? fallback;
+      trackAttach(tokenId);
     }
     const handle = createPing({
       kind: payload.kind,
@@ -516,6 +561,9 @@ function createApi(config) {
       positionProvider,
       onDispose: () => {
         registry.delete(payload.id);
+        if (payload.kind === "token-attach" && payload.tokenId) {
+          untrackAttach(payload.tokenId);
+        }
       }
     });
     if (payload.kind === "rally" && payload.moveCanvas && config.userRoleProvider() >= getMinRallyRole()) {

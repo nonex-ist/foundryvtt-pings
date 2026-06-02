@@ -79,6 +79,38 @@ function isCurrentSceneDisabled(): boolean {
 export function createApi(config: CreateApiConfig): ApiBundle {
     const registry = new Map<string, PingHandle>();
 
+    // Reference count per token id — a token may have multiple concurrent
+    // attach pings (e.g. two players ping the same token within seconds);
+    // we only release the move-lock when the last ping fades.
+    const attachedTokens = new Map<string, number>();
+    const trackAttach = (tokenId: string): void => {
+        attachedTokens.set(tokenId, (attachedTokens.get(tokenId) ?? 0) + 1);
+    };
+    const untrackAttach = (tokenId: string): void => {
+        const next = (attachedTokens.get(tokenId) ?? 0) - 1;
+        if (next <= 0) attachedTokens.delete(tokenId);
+        else attachedTokens.set(tokenId, next);
+    };
+
+    // Block movement (x / y / rotation) of any token currently flagged
+    // as attached. Returning false from preUpdateToken cancels the update
+    // on the requester's client before it goes to the server.
+    Hooks.on('preUpdateToken', (...args: unknown[]) => {
+        const tokenDoc = args[0] as { id?: string; name?: string } | undefined;
+        const changes = args[1] as
+            | { x?: number; y?: number; rotation?: number }
+            | undefined;
+        if (!tokenDoc?.id || !changes) return undefined;
+        const moves =
+            changes.x !== undefined || changes.y !== undefined || changes.rotation !== undefined;
+        if (!moves) return undefined;
+        if (!attachedTokens.has(tokenDoc.id)) return undefined;
+        ui.notifications?.warn(
+            `Pings: ${tokenDoc.name ?? 'token'} is marked — movement blocked until the marker fades.`,
+        );
+        return false;
+    });
+
     function displayLocally(payload: DisplayPingPayload): PingHandle | null {
         // token-attach: rebuild position each frame from the followed token.
         let positionProvider: (() => WorldPosition) | undefined;
@@ -86,6 +118,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
             const tokenId = payload.tokenId;
             const fallback = payload.position;
             positionProvider = () => canvas.tokens?.get(tokenId)?.center ?? fallback;
+            trackAttach(tokenId);
         }
 
         const handle = createPing({
@@ -98,6 +131,9 @@ export function createApi(config: CreateApiConfig): ApiBundle {
             positionProvider,
             onDispose: () => {
                 registry.delete(payload.id);
+                if (payload.kind === 'token-attach' && payload.tokenId) {
+                    untrackAttach(payload.tokenId);
+                }
             },
         });
 
