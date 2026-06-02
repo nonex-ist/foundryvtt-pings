@@ -22,6 +22,172 @@ var AUDIO_ENABLED_DEFAULT = true;
 var AUDIO_VOLUME_DEFAULT = 0.5;
 var AUDIO_PATH_PREFIX = `modules/${MODULE_ID}/sounds`;
 
+// src/module/settings/keys.ts
+var SETTING_KEYS = {
+  rateLimitCapacity: "rateLimitCapacity",
+  rateLimitWindowMs: "rateLimitWindowMs",
+  minRallyRole: "minRallyRole",
+  minAlertRole: "minAlertRole",
+  triggerBinding: "triggerBinding",
+  holdDurationMs: "holdDurationMs",
+  holdCancelTolerancePx: "holdCancelTolerancePx",
+  menuSummonPx: "menuSummonPx",
+  audioEnabled: "audioEnabled",
+  audioVolume: "audioVolume"
+};
+var SCENE_FLAG_DISABLED = "disabled";
+
+// src/module/settings/register.ts
+var ROLE_CHOICES = {
+  "0": "NONE",
+  "1": "PLAYER",
+  "2": "TRUSTED",
+  "3": "ASSISTANT",
+  "4": "GAMEMASTER"
+};
+function registerSettings(reactivity) {
+  if (!game.settings) return;
+  const s = game.settings;
+  const triggerReinstall = () => reactivity.onTriggerChanged();
+  s.register(MODULE_ID, SETTING_KEYS.rateLimitCapacity, {
+    name: `${MODULE_ID}.settings.rateLimitCapacity.name`,
+    hint: `${MODULE_ID}.settings.rateLimitCapacity.hint`,
+    scope: "world",
+    config: true,
+    type: Number,
+    default: RATE_LIMIT_CAPACITY,
+    range: { min: 1, max: 100, step: 1 },
+    requiresReload: true
+  });
+  s.register(MODULE_ID, SETTING_KEYS.rateLimitWindowMs, {
+    name: `${MODULE_ID}.settings.rateLimitWindowMs.name`,
+    hint: `${MODULE_ID}.settings.rateLimitWindowMs.hint`,
+    scope: "world",
+    config: true,
+    type: Number,
+    default: RATE_LIMIT_WINDOW_MS,
+    range: { min: 1e3, max: 6e4, step: 500 },
+    requiresReload: true
+  });
+  s.register(MODULE_ID, SETTING_KEYS.minRallyRole, {
+    name: `${MODULE_ID}.settings.minRallyRole.name`,
+    hint: `${MODULE_ID}.settings.minRallyRole.hint`,
+    scope: "world",
+    config: true,
+    type: Number,
+    default: MIN_RALLY_ROLE,
+    choices: ROLE_CHOICES,
+    requiresReload: false
+  });
+  s.register(MODULE_ID, SETTING_KEYS.minAlertRole, {
+    name: `${MODULE_ID}.settings.minAlertRole.name`,
+    hint: `${MODULE_ID}.settings.minAlertRole.hint`,
+    scope: "world",
+    config: true,
+    type: Number,
+    default: MIN_ALERT_ROLE,
+    choices: ROLE_CHOICES,
+    requiresReload: false
+  });
+  s.register(MODULE_ID, SETTING_KEYS.triggerBinding, {
+    name: `${MODULE_ID}.settings.triggerBinding.name`,
+    hint: `${MODULE_ID}.settings.triggerBinding.hint`,
+    scope: "client",
+    config: true,
+    type: String,
+    default: "LeftClick",
+    onChange: triggerReinstall
+  });
+  s.register(MODULE_ID, SETTING_KEYS.holdDurationMs, {
+    name: `${MODULE_ID}.settings.holdDurationMs.name`,
+    hint: `${MODULE_ID}.settings.holdDurationMs.hint`,
+    scope: "client",
+    config: true,
+    type: Number,
+    default: HOLD_DURATION_MS,
+    range: { min: 100, max: 2e3, step: 50 },
+    onChange: triggerReinstall
+  });
+  s.register(MODULE_ID, SETTING_KEYS.holdCancelTolerancePx, {
+    name: `${MODULE_ID}.settings.holdCancelTolerancePx.name`,
+    hint: `${MODULE_ID}.settings.holdCancelTolerancePx.hint`,
+    scope: "client",
+    config: true,
+    type: Number,
+    default: HOLD_CANCEL_TOLERANCE_PX,
+    range: { min: 1, max: 50, step: 1 },
+    onChange: triggerReinstall
+  });
+  s.register(MODULE_ID, SETTING_KEYS.menuSummonPx, {
+    name: `${MODULE_ID}.settings.menuSummonPx.name`,
+    hint: `${MODULE_ID}.settings.menuSummonPx.hint`,
+    scope: "client",
+    config: true,
+    type: Number,
+    default: MENU_SUMMON_PX,
+    range: { min: 5, max: 200, step: 5 },
+    onChange: triggerReinstall
+  });
+  s.register(MODULE_ID, SETTING_KEYS.audioEnabled, {
+    name: `${MODULE_ID}.settings.audioEnabled.name`,
+    hint: `${MODULE_ID}.settings.audioEnabled.hint`,
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: AUDIO_ENABLED_DEFAULT,
+    onChange: (value) => reactivity.onAudioEnabledChanged(value)
+  });
+  s.register(MODULE_ID, SETTING_KEYS.audioVolume, {
+    name: `${MODULE_ID}.settings.audioVolume.name`,
+    hint: `${MODULE_ID}.settings.audioVolume.hint`,
+    scope: "client",
+    config: true,
+    type: Number,
+    default: AUDIO_VOLUME_DEFAULT,
+    range: { min: 0, max: 1, step: 0.05 },
+    onChange: (value) => reactivity.onAudioVolumeChanged(value)
+  });
+}
+function getOr(key, fallback) {
+  if (!game.settings) return fallback;
+  try {
+    const value = game.settings.get(MODULE_ID, key);
+    return value === void 0 || value === null ? fallback : value;
+  } catch {
+    return fallback;
+  }
+}
+function getRateLimitCapacity() {
+  return getOr(SETTING_KEYS.rateLimitCapacity, RATE_LIMIT_CAPACITY);
+}
+function getRateLimitWindowMs() {
+  return getOr(SETTING_KEYS.rateLimitWindowMs, RATE_LIMIT_WINDOW_MS);
+}
+function getMinRallyRole() {
+  return getOr(SETTING_KEYS.minRallyRole, MIN_RALLY_ROLE);
+}
+function getMinAlertRole() {
+  return getOr(SETTING_KEYS.minAlertRole, MIN_ALERT_ROLE);
+}
+function getTriggerBinding() {
+  return getOr(SETTING_KEYS.triggerBinding, "LeftClick");
+}
+function getHoldDurationMs() {
+  return getOr(SETTING_KEYS.holdDurationMs, HOLD_DURATION_MS);
+}
+function getHoldCancelTolerancePx() {
+  return getOr(SETTING_KEYS.holdCancelTolerancePx, HOLD_CANCEL_TOLERANCE_PX);
+}
+function getMenuSummonPx() {
+  return getOr(SETTING_KEYS.menuSummonPx, MENU_SUMMON_PX);
+}
+function getAudioEnabled() {
+  return getOr(SETTING_KEYS.audioEnabled, AUDIO_ENABLED_DEFAULT);
+}
+function getAudioVolume() {
+  return getOr(SETTING_KEYS.audioVolume, AUDIO_VOLUME_DEFAULT);
+}
+
 // src/module/render/animation.ts
 function runAnimation(container, config) {
   const { durationMs, fadeInMs, fadeOutMs, update, onComplete } = config;
@@ -321,6 +487,9 @@ function warnUser(message) {
     console.warn(`${MODULE_ID} | ${message}`);
   }
 }
+function isCurrentSceneDisabled() {
+  return canvas.scene?.getFlag(MODULE_ID, SCENE_FLAG_DISABLED) === true;
+}
 function createApi(config) {
   const registry = /* @__PURE__ */ new Map();
   function displayLocally(payload) {
@@ -342,7 +511,7 @@ function createApi(config) {
         registry.delete(payload.id);
       }
     });
-    if (payload.kind === "rally" && payload.moveCanvas && config.userRoleProvider() >= MIN_RALLY_ROLE) {
+    if (payload.kind === "rally" && payload.moveCanvas && config.userRoleProvider() >= getMinRallyRole()) {
       void canvas.animatePan({ x: payload.position.x, y: payload.position.y, duration: 250 });
     }
     if (payload.kind !== "rally" && canvas.controls?.drawOffscreenPing) {
@@ -410,13 +579,14 @@ function createApi(config) {
     return payload;
   }
   function checkSenderRole(kind) {
-    if (kind === "alert" && config.userRoleProvider() < MIN_ALERT_ROLE) {
+    if (kind === "alert" && config.userRoleProvider() < getMinAlertRole()) {
       warnUser("Alert pings require Assistant role or higher.");
       return false;
     }
     return true;
   }
   function ping(kind, position, opts) {
+    if (isCurrentSceneDisabled()) return null;
     if (!checkSenderRole(kind)) return null;
     const payload = buildPayload(kind, position, opts);
     if (!payload) return null;
@@ -426,6 +596,7 @@ function createApi(config) {
     return payload.id;
   }
   function showPing(kind, position, opts) {
+    if (isCurrentSceneDisabled()) return null;
     if (!checkSenderRole(kind)) return null;
     const payload = buildPayload(kind, position, opts);
     if (!payload) return null;
@@ -434,6 +605,7 @@ function createApi(config) {
     return payload.id;
   }
   function sendPing(kind, position, opts) {
+    if (isCurrentSceneDisabled()) return null;
     if (!checkSenderRole(kind)) return null;
     const payload = buildPayload(kind, position, opts);
     if (!payload) return null;
@@ -450,6 +622,11 @@ function createApi(config) {
       here: (position, opts) => ping("here", position, opts),
       showHere: (position, opts) => showPing("here", position, opts),
       sendHere: (position, opts) => sendPing("here", position, opts),
+      isSceneDisabled: isCurrentSceneDisabled,
+      async setSceneDisabled(disabled) {
+        if (!canvas.scene) return;
+        await canvas.scene.setFlag(MODULE_ID, SCENE_FLAG_DISABLED, disabled);
+      },
       remove(id, opts) {
         assertId(id);
         const handle = registry.get(id);
@@ -468,6 +645,7 @@ function createApi(config) {
       }
     },
     handleInboundDisplay(payload) {
+      if (isCurrentSceneDisabled()) return;
       if (!Hooks.call("pings.preDisplay", payload)) return;
       displayLocally(payload);
     },
@@ -487,9 +665,9 @@ function createAudioController() {
     play(kind) {
       if (!enabled) return;
       try {
-        const audio = new Audio(`${AUDIO_PATH_PREFIX}/${kind}.ogg`);
-        audio.volume = volume;
-        const result = audio.play();
+        const audio2 = new Audio(`${AUDIO_PATH_PREFIX}/${kind}.ogg`);
+        audio2.volume = volume;
+        const result = audio2.play();
         if (result instanceof Promise) {
           result.catch(() => {
           });
@@ -825,6 +1003,7 @@ function installSocket(config) {
 var teardownTrigger = null;
 var socketHandle = null;
 var apiBundle = null;
+var audio = null;
 function resolveUserColor() {
   const c = game.user?.color;
   if (typeof c === "number") return c;
@@ -873,23 +1052,39 @@ function commitPing(kind, position) {
 }
 function reinstallTrigger() {
   teardownTrigger?.();
+  if (!canvas.app?.view) return;
+  let binding;
+  try {
+    binding = parseBinding(getTriggerBinding());
+  } catch (err) {
+    console.warn(`${MODULE_ID} | invalid trigger binding, falling back to LeftClick`, err);
+    binding = parseBinding("LeftClick");
+  }
+  const menuPx = getMenuSummonPx();
   teardownTrigger = installTrigger({
-    binding: parseBinding("LeftClick"),
-    holdDurationMs: HOLD_DURATION_MS,
-    holdCancelTolerancePx: HOLD_CANCEL_TOLERANCE_PX,
-    menuSummonPx: MENU_SUMMON_PX,
+    binding,
+    holdDurationMs: getHoldDurationMs(),
+    holdCancelTolerancePx: getHoldCancelTolerancePx(),
+    menuSummonPx: menuPx,
     callbacks: {
       showPreview: showPreviewPing,
       openMenu: (clientPosition) => openRadialMenu({
         clientX: clientPosition.x,
         clientY: clientPosition.y,
-        deadzonePx: MENU_SUMMON_PX
+        deadzonePx: menuPx
       }),
       commit: commitPing
     }
   });
 }
 Hooks.once("init", () => {
+  registerSettings({
+    onTriggerChanged: () => {
+      if (canvas.ready) reinstallTrigger();
+    },
+    onAudioEnabledChanged: (enabled) => audio?.setEnabled(enabled),
+    onAudioVolumeChanged: (volume) => audio?.setVolume(volume)
+  });
   console.log(`${MODULE_ID} | init`);
 });
 Hooks.on("canvasReady", () => {
@@ -901,10 +1096,12 @@ Hooks.on("canvasTearDown", () => {
 });
 Hooks.once("ready", () => {
   const version = game.modules?.get(MODULE_ID)?.version ?? "0.0.0";
-  const audio = createAudioController();
+  audio = createAudioController();
+  audio.setEnabled(getAudioEnabled());
+  audio.setVolume(getAudioVolume());
   Hooks.on("pings.display", (_handle, payload) => {
     const kind = payload?.kind;
-    if (kind) audio.play(kind);
+    if (kind) audio?.play(kind);
   });
   apiBundle = createApi({
     version,
@@ -921,8 +1118,8 @@ Hooks.once("ready", () => {
       onRemove: apiBundle.handleInboundRemove
     },
     rateLimit: createRateLimit({
-      capacity: RATE_LIMIT_CAPACITY,
-      windowMs: RATE_LIMIT_WINDOW_MS
+      capacity: getRateLimitCapacity(),
+      windowMs: getRateLimitWindowMs()
     }),
     sceneIdProvider: () => canvas.scene?.id ?? null,
     isUserGM: (userId) => game.users?.get(userId)?.isGM ?? false

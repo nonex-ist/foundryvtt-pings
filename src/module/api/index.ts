@@ -1,4 +1,6 @@
-import { ALERT_COLOR, KIND_DEFAULT_DURATION_MS, MIN_ALERT_ROLE, MIN_RALLY_ROLE, MODULE_ID } from '../constants.js';
+import { ALERT_COLOR, KIND_DEFAULT_DURATION_MS, MODULE_ID } from '../constants.js';
+import { SCENE_FLAG_DISABLED } from '../settings/keys.js';
+import { getMinAlertRole, getMinRallyRole } from '../settings/register.js';
 import type { DisplayPingPayload, RemovePingPayload } from '../network/messages.js';
 import type { SocketHandle } from '../network/socket.js';
 import { createPing, type PingHandle } from '../render/ping.js';
@@ -39,6 +41,10 @@ export interface PingsApi {
     showHere(position: WorldPosition, opts?: HereOptions): string | null;
     sendHere(position: WorldPosition, opts?: HereOptions): string | null;
     remove(id: string, opts?: RemoveOptions): void;
+    /** True if pings are suppressed on the current scene (scene flag). */
+    isSceneDisabled(): boolean;
+    /** Toggle the per-scene disable flag (GM-only; no enforcement here — Foundry rejects setFlag for non-owners). */
+    setSceneDisabled(disabled: boolean): Promise<void>;
 }
 
 export interface CreateApiConfig {
@@ -64,6 +70,10 @@ function warnUser(message: string): void {
     } else {
         console.warn(`${MODULE_ID} | ${message}`);
     }
+}
+
+function isCurrentSceneDisabled(): boolean {
+    return canvas.scene?.getFlag(MODULE_ID, SCENE_FLAG_DISABLED) === true;
 }
 
 export function createApi(config: CreateApiConfig): ApiBundle {
@@ -95,7 +105,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
         if (
             payload.kind === 'rally' &&
             payload.moveCanvas &&
-            config.userRoleProvider() >= MIN_RALLY_ROLE
+            config.userRoleProvider() >= getMinRallyRole()
         ) {
             void canvas.animatePan({ x: payload.position.x, y: payload.position.y, duration: 250 });
         }
@@ -186,9 +196,9 @@ export function createApi(config: CreateApiConfig): ApiBundle {
         return payload;
     }
 
-    /** Sender-side role gate: refuses to emit alert pings below Assistant. */
+    /** Sender-side role gate: refuses to emit alert pings below the configured threshold. */
     function checkSenderRole(kind: PingKind): boolean {
-        if (kind === 'alert' && config.userRoleProvider() < MIN_ALERT_ROLE) {
+        if (kind === 'alert' && config.userRoleProvider() < getMinAlertRole()) {
             warnUser('Alert pings require Assistant role or higher.');
             return false;
         }
@@ -196,6 +206,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
     }
 
     function ping(kind: PingKind, position: WorldPosition, opts: PingOptions | undefined): string | null {
+        if (isCurrentSceneDisabled()) return null;
         if (!checkSenderRole(kind)) return null;
         const payload = buildPayload(kind, position, opts);
         if (!payload) return null;
@@ -206,6 +217,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
     }
 
     function showPing(kind: PingKind, position: WorldPosition, opts: PingOptions | undefined): string | null {
+        if (isCurrentSceneDisabled()) return null;
         if (!checkSenderRole(kind)) return null;
         const payload = buildPayload(kind, position, opts);
         if (!payload) return null;
@@ -215,6 +227,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
     }
 
     function sendPing(kind: PingKind, position: WorldPosition, opts: PingOptions | undefined): string | null {
+        if (isCurrentSceneDisabled()) return null;
         if (!checkSenderRole(kind)) return null;
         const payload = buildPayload(kind, position, opts);
         if (!payload) return null;
@@ -232,6 +245,12 @@ export function createApi(config: CreateApiConfig): ApiBundle {
             here: (position, opts) => ping('here', position, opts),
             showHere: (position, opts) => showPing('here', position, opts),
             sendHere: (position, opts) => sendPing('here', position, opts),
+
+            isSceneDisabled: isCurrentSceneDisabled,
+            async setSceneDisabled(disabled) {
+                if (!canvas.scene) return;
+                await canvas.scene.setFlag(MODULE_ID, SCENE_FLAG_DISABLED, disabled);
+            },
 
             remove(id, opts) {
                 assertId(id);
@@ -253,6 +272,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
         },
 
         handleInboundDisplay(payload) {
+            if (isCurrentSceneDisabled()) return;
             if (!Hooks.call('pings.preDisplay', payload)) return;
             displayLocally(payload);
         },

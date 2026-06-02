@@ -1,3 +1,47 @@
 {
-  "PINGS.ModuleTitle": "Pings"
+  "PINGS.ModuleTitle": "Pings",
+  "pings": {
+    "settings": {
+      "rateLimitCapacity": {
+        "name": "Rate limit — max pings per window",
+        "hint": "Maximum pings any one user may emit within the window below. GMs are exempt. Default: 3."
+      },
+      "rateLimitWindowMs": {
+        "name": "Rate limit — window (ms)",
+        "hint": "Sliding window over which the rate limit applies. Default: 5000ms (3 per 5s by default)."
+      },
+      "minRallyRole": {
+        "name": "Rally — minimum receiver role for viewport pan",
+        "hint": "Users below this role still see the rally ping but their viewport will not auto-pan to it. Default: Trusted."
+      },
+      "minAlertRole": {
+        "name": "Alert — minimum sender role",
+        "hint": "Users below this role cannot send alert pings (they'll see a notification). Default: Assistant."
+      },
+      "triggerBinding": {
+        "name": "Trigger binding",
+        "hint": "Mouse button (plus optional modifiers) that initiates the ping gesture. Examples: 'LeftClick', 'Shift + LeftClick', 'MiddleClick'. Default: LeftClick."
+      },
+      "holdDurationMs": {
+        "name": "Hold duration (ms)",
+        "hint": "How long the trigger must be held before the preview ping appears. Default: 350ms."
+      },
+      "holdCancelTolerancePx": {
+        "name": "Hold cancel tolerance (px)",
+        "hint": "Drag distance during the initial hold that cancels the gesture. Default: 5px."
+      },
+      "menuSummonPx": {
+        "name": "Menu summon distance (px)",
+        "hint": "Drag distance past which the radial menu opens. Also acts as the center deadzone (return inside to commit 'here'). Default: 25px."
+      },
+      "audioEnabled": {
+        "name": "Enable ping sounds",
+        "hint": "Play a short sound when a ping appears."
+      },
+      "audioVolume": {
+        "name": "Ping sound volume",
+        "hint": "0 = muted, 1 = full volume. Default: 0.5."
+      }
+    }
+  }
 }
