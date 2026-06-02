@@ -2,6 +2,7 @@
 var MODULE_ID = "pings";
 var HOLD_DURATION_MS = 350;
 var HOLD_CANCEL_TOLERANCE_PX = 5;
+var MENU_SUMMON_PX = 25;
 var FADE_IN_MS = 500;
 var FADE_OUT_MS = 500;
 var DEFAULT_PING_DURATION_MS = 6e3;
@@ -75,12 +76,11 @@ function createHereVisual({ color, size }) {
 function createPingVisual(kind, opts) {
   switch (kind) {
     case "here":
-      return createHereVisual(opts);
     case "rally":
     case "alert":
     case "text":
     case "token-attach":
-      throw new Error(`pings: visual for "${kind}" not yet implemented`);
+      return createHereVisual(opts);
   }
 }
 
@@ -124,9 +124,9 @@ function assertPosition(value, name = "position") {
   return value;
 }
 function assertColor(value, name = "color") {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > MAX_COLOR) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > MAX_COLOR) {
     throw new TypeError(
-      `pings: ${name} must be a finite number between 0x000000 and 0xffffff`
+      `pings: ${name} must be an integer between 0x000000 and 0xffffff`
     );
   }
   return value;
@@ -153,7 +153,7 @@ function createApi(config) {
       position: payload.position,
       color: payload.color,
       size: config.canvasSizeProvider(),
-      durationMs: DEFAULT_PING_DURATION_MS,
+      durationMs: payload.durationMs ?? DEFAULT_PING_DURATION_MS,
       onDispose: () => {
         registry.delete(payload.id);
       }
@@ -162,48 +162,56 @@ function createApi(config) {
     Hooks.callAll("pings.display", handle, payload);
     return handle;
   }
-  function buildHerePayload(position, opts) {
+  function buildPayload(kind, position, opts) {
     assertPosition(position);
     const color = opts?.color !== void 0 ? assertColor(opts.color) : config.senderColorProvider();
-    if (opts?.durationMs !== void 0) assertPositiveInt(opts.durationMs, "durationMs");
+    const durationMs = opts?.durationMs !== void 0 ? assertPositiveInt(opts.durationMs, "durationMs") : void 0;
     const sceneId = config.sceneIdProvider();
     const senderId = config.senderIdProvider();
     if (!sceneId || !senderId) return null;
-    return {
+    const payload = {
       id: foundry.utils.randomID(),
       sceneId,
       senderId,
-      kind: "here",
+      kind,
       position,
       color,
       moveCanvas: false
     };
+    if (durationMs !== void 0) payload.durationMs = durationMs;
+    return payload;
+  }
+  function ping(kind, position, opts) {
+    const payload = buildPayload(kind, position, opts);
+    if (!payload) return null;
+    if (!Hooks.call("pings.preDisplay", payload)) return null;
+    if (!config.socketProvider()?.broadcast({ type: "displayPing", payload })) return null;
+    displayLocally(payload);
+    return payload.id;
+  }
+  function showPing(kind, position, opts) {
+    const payload = buildPayload(kind, position, opts);
+    if (!payload) return null;
+    if (!Hooks.call("pings.preDisplay", payload)) return null;
+    displayLocally(payload);
+    return payload.id;
+  }
+  function sendPing(kind, position, opts) {
+    const payload = buildPayload(kind, position, opts);
+    if (!payload) return null;
+    if (!Hooks.call("pings.preDisplay", payload)) return null;
+    if (!config.socketProvider()?.broadcast({ type: "displayPing", payload })) return null;
+    return payload.id;
   }
   return {
     api: {
       version: config.version,
-      here(position, opts) {
-        const payload = buildHerePayload(position, opts);
-        if (!payload) return null;
-        if (!Hooks.call("pings.preDisplay", payload)) return null;
-        if (!config.socketProvider()?.broadcast({ type: "displayPing", payload })) return null;
-        displayLocally(payload);
-        return payload.id;
-      },
-      showHere(position, opts) {
-        const payload = buildHerePayload(position, opts);
-        if (!payload) return null;
-        if (!Hooks.call("pings.preDisplay", payload)) return null;
-        displayLocally(payload);
-        return payload.id;
-      },
-      sendHere(position, opts) {
-        const payload = buildHerePayload(position, opts);
-        if (!payload) return null;
-        if (!Hooks.call("pings.preDisplay", payload)) return null;
-        if (!config.socketProvider()?.broadcast({ type: "displayPing", payload })) return null;
-        return payload.id;
-      },
+      ping,
+      showPing,
+      sendPing,
+      here: (position, opts) => ping("here", position, opts),
+      showHere: (position, opts) => showPing("here", position, opts),
+      sendHere: (position, opts) => sendPing("here", position, opts),
       remove(id, opts) {
         assertId(id);
         const handle = registry.get(id);
@@ -285,6 +293,68 @@ function eventMatches(event, spec) {
   return event.button === spec.button && event.shiftKey === spec.shift && event.ctrlKey === spec.ctrl && event.altKey === spec.alt && event.metaKey === spec.meta;
 }
 
+// src/module/input/radial-menu.ts
+var RADIAL_SEGMENTS = [
+  { kind: "rally", angleCenter: -Math.PI / 2, label: "Rally" },
+  { kind: "alert", angleCenter: 0, label: "Alert" },
+  { kind: "text", angleCenter: Math.PI / 2, label: "Text" },
+  { kind: "token-attach", angleCenter: Math.PI, label: "Token" }
+];
+function pickKindFromDelta(deltaX, deltaY, deadzonePx) {
+  const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+  if (dist < deadzonePx) return "here";
+  const angle = Math.atan2(deltaY, deltaX);
+  if (angle >= -Math.PI / 4 && angle < Math.PI / 4) return "alert";
+  if (angle >= Math.PI / 4 && angle < 3 * Math.PI / 4) return "text";
+  if (angle >= -(3 * Math.PI) / 4 && angle < -Math.PI / 4) return "rally";
+  return "token-attach";
+}
+var SEGMENT_RADIUS_PX = 70;
+var SEGMENT_HALF_SIZE_PX = 28;
+function openRadialMenu(opts) {
+  const root = document.createElement("div");
+  root.className = "pings-radial-menu";
+  root.style.left = `${opts.clientX}px`;
+  root.style.top = `${opts.clientY}px`;
+  const center = document.createElement("div");
+  center.className = "pings-radial-segment pings-radial-center";
+  center.textContent = "Here";
+  root.appendChild(center);
+  const segments = /* @__PURE__ */ new Map([["here", center]]);
+  for (const seg of RADIAL_SEGMENTS) {
+    const el = document.createElement("div");
+    el.className = "pings-radial-segment";
+    el.textContent = seg.label;
+    const offsetX = Math.cos(seg.angleCenter) * SEGMENT_RADIUS_PX - SEGMENT_HALF_SIZE_PX;
+    const offsetY = Math.sin(seg.angleCenter) * SEGMENT_RADIUS_PX - SEGMENT_HALF_SIZE_PX;
+    el.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+    root.appendChild(el);
+    segments.set(seg.kind, el);
+  }
+  document.body.appendChild(root);
+  let currentHighlight = null;
+  const highlight = (kind) => {
+    if (currentHighlight === kind) return;
+    if (currentHighlight !== null) {
+      segments.get(currentHighlight)?.classList.remove("pings-radial-active");
+    }
+    segments.get(kind)?.classList.add("pings-radial-active");
+    currentHighlight = kind;
+  };
+  highlight("here");
+  return {
+    onCursorMove(clientX, clientY) {
+      highlight(pickKindFromDelta(clientX - opts.clientX, clientY - opts.clientY, opts.deadzonePx));
+    },
+    getSelectedKind(clientX, clientY) {
+      return pickKindFromDelta(clientX - opts.clientX, clientY - opts.clientY, opts.deadzonePx);
+    },
+    destroy() {
+      root.remove();
+    }
+  };
+}
+
 // src/module/input/trigger.ts
 function clientToWorld(view, stage, clientX, clientY) {
   const rect = view.getBoundingClientRect();
@@ -300,55 +370,85 @@ function installTrigger(config) {
   const view = canvas.app.view;
   const stage = canvas.app.stage;
   let hold = null;
-  const cancelHold = () => {
-    if (hold) {
-      clearTimeout(hold.timerId);
-      hold = null;
-    }
+  const reset = () => {
+    if (!hold) return;
+    if (hold.timerId !== null) clearTimeout(hold.timerId);
+    hold.previewDispose?.();
+    hold.menu?.destroy();
+    hold = null;
   };
   const onPointerDown = (ev) => {
     if (hold) return;
     if (!eventMatches(ev, config.binding)) return;
-    const pointerId = ev.pointerId;
     const startClientX = ev.clientX;
     const startClientY = ev.clientY;
+    const startWorld = clientToWorld(view, stage, startClientX, startClientY);
+    const pointerId = ev.pointerId;
     const timerId = setTimeout(() => {
-      if (!hold || hold.pointerId !== pointerId) return;
-      hold.committed = true;
-      const position = clientToWorld(view, stage, startClientX, startClientY);
-      config.onIntent({ kind: "here", position });
+      if (!hold || hold.pointerId !== pointerId || hold.phase !== "holding") return;
+      hold.phase = "preview";
+      hold.timerId = null;
+      hold.previewDispose = config.callbacks.showPreview(startWorld);
     }, config.holdDurationMs);
     hold = {
+      phase: "holding",
       pointerId,
       startClientX,
       startClientY,
+      startWorld,
       timerId,
-      committed: false
+      previewDispose: null,
+      menu: null
     };
   };
   const onPointerMove = (ev) => {
     if (!hold || hold.pointerId !== ev.pointerId) return;
-    if (hold.committed) return;
     const dx = ev.clientX - hold.startClientX;
     const dy = ev.clientY - hold.startClientY;
-    if (dx * dx + dy * dy > config.holdCancelTolerancePx * config.holdCancelTolerancePx) {
-      cancelHold();
+    const distSq = dx * dx + dy * dy;
+    if (hold.phase === "holding") {
+      if (distSq > config.holdCancelTolerancePx * config.holdCancelTolerancePx) {
+        reset();
+      }
+      return;
     }
+    if (hold.phase === "preview") {
+      if (distSq > config.menuSummonPx * config.menuSummonPx) {
+        hold.previewDispose?.();
+        hold.previewDispose = null;
+        hold.menu = config.callbacks.openMenu(
+          { x: hold.startClientX, y: hold.startClientY },
+          hold.startWorld
+        );
+        hold.phase = "menu";
+        hold.menu.onCursorMove(ev.clientX, ev.clientY);
+      }
+      return;
+    }
+    hold.menu?.onCursorMove(ev.clientX, ev.clientY);
   };
   const onPointerUp = (ev) => {
     if (!hold || hold.pointerId !== ev.pointerId) return;
-    cancelHold();
+    let commitKind = null;
+    if (hold.phase === "preview") {
+      commitKind = "here";
+    } else if (hold.phase === "menu" && hold.menu) {
+      commitKind = hold.menu.getSelectedKind(ev.clientX, ev.clientY);
+    }
+    const commitPosition = hold.startWorld;
+    reset();
+    if (commitKind !== null) config.callbacks.commit(commitKind, commitPosition);
   };
   const onPointerCancel = (ev) => {
     if (!hold || hold.pointerId !== ev.pointerId) return;
-    cancelHold();
+    reset();
   };
   view.addEventListener("pointerdown", onPointerDown);
   view.addEventListener("pointermove", onPointerMove);
   view.addEventListener("pointerup", onPointerUp);
   view.addEventListener("pointercancel", onPointerCancel);
   return () => {
-    cancelHold();
+    reset();
     view.removeEventListener("pointerdown", onPointerDown);
     view.removeEventListener("pointermove", onPointerMove);
     view.removeEventListener("pointerup", onPointerUp);
@@ -396,7 +496,7 @@ function isWorldPosition(value) {
 }
 function isDisplayPayload(value) {
   if (!isObject(value)) return false;
-  return typeof value.id === "string" && typeof value.sceneId === "string" && typeof value.senderId === "string" && typeof value.kind === "string" && KINDS.has(value.kind) && isWorldPosition(value.position) && typeof value.color === "number" && Number.isFinite(value.color) && typeof value.moveCanvas === "boolean" && (value.text === void 0 || typeof value.text === "string") && (value.tokenId === void 0 || typeof value.tokenId === "string");
+  return typeof value.id === "string" && typeof value.sceneId === "string" && typeof value.senderId === "string" && typeof value.kind === "string" && KINDS.has(value.kind) && isWorldPosition(value.position) && typeof value.color === "number" && Number.isFinite(value.color) && typeof value.moveCanvas === "boolean" && (value.durationMs === void 0 || typeof value.durationMs === "number" && Number.isInteger(value.durationMs) && value.durationMs > 0) && (value.text === void 0 || typeof value.text === "string") && (value.tokenId === void 0 || typeof value.tokenId === "string");
 }
 function isRemovePayload(value) {
   return isObject(value) && typeof value.id === "string" && typeof value.sceneId === "string";
@@ -473,8 +573,18 @@ function resolveUserColor() {
   }
   return DEFAULT_PING_COLOR;
 }
-function onIntent(intent) {
-  apiBundle?.api.here(intent.position);
+function showPreviewPing(position) {
+  const id = apiBundle?.api.showHere(position) ?? null;
+  return () => {
+    if (id !== null) apiBundle?.api.remove(id, { broadcast: false });
+  };
+}
+function commitPing(kind, position) {
+  if (kind === "here") {
+    apiBundle?.api.sendHere(position);
+  } else {
+    apiBundle?.api.ping(kind, position);
+  }
 }
 function reinstallTrigger() {
   teardownTrigger?.();
@@ -482,7 +592,16 @@ function reinstallTrigger() {
     binding: parseBinding("LeftClick"),
     holdDurationMs: HOLD_DURATION_MS,
     holdCancelTolerancePx: HOLD_CANCEL_TOLERANCE_PX,
-    onIntent
+    menuSummonPx: MENU_SUMMON_PX,
+    callbacks: {
+      showPreview: showPreviewPing,
+      openMenu: (clientPosition) => openRadialMenu({
+        clientX: clientPosition.x,
+        clientY: clientPosition.y,
+        deadzonePx: MENU_SUMMON_PX
+      }),
+      commit: commitPing
+    }
   });
 }
 Hooks.once("init", () => {

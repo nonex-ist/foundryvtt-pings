@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     assertColor,
     assertId,
+    assertKind,
     assertPosition,
     assertPositiveInt,
 } from './validators.js';
@@ -81,5 +82,29 @@ describe('assertPositiveInt', () => {
         ['string', '5'],
     ])('rejects %s', (_label, value) => {
         expect(() => assertPositiveInt(value, 'n')).toThrow(TypeError);
+    });
+});
+
+describe('assertKind', () => {
+    it.each([['here'], ['rally'], ['alert'], ['text'], ['token-attach']])(
+        'accepts %s',
+        (kind) => {
+            expect(assertKind(kind)).toBe(kind);
+        },
+    );
+
+    it.each([
+        ['empty string', ''],
+        ['arbitrary string', 'rocket'],
+        ['case-sensitive mismatch', 'Here'],
+        ['number', 0],
+        ['null', null],
+        ['undefined', undefined],
+    ])('rejects %s', (_label, value) => {
+        expect(() => assertKind(value)).toThrow(TypeError);
+    });
+
+    it('error message lists the allowed kinds', () => {
+        expect(() => assertKind('bad')).toThrow(/here.*rally.*alert.*text.*token-attach/);
     });
 });

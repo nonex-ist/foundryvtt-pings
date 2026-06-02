@@ -49,14 +49,17 @@ function createHereVisual({ color, size }: VisualOptions): PingVisual {
     return { container, update };
 }
 
+// M5 placeholder: until M6 ships dedicated visuals for rally / alert / text /
+// token-attach, every kind shares the "here" rings. The kind still rides on
+// the payload so API dispatch and integration hooks distinguish them; only
+// the pixels are temporarily shared.
 export function createPingVisual(kind: PingKind, opts: VisualOptions): PingVisual {
     switch (kind) {
         case 'here':
-            return createHereVisual(opts);
         case 'rally':
         case 'alert':
         case 'text':
         case 'token-attach':
-            throw new Error(`pings: visual for "${kind}" not yet implemented`);
+            return createHereVisual(opts);
     }
 }
