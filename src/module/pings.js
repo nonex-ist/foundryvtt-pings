@@ -6,6 +6,8 @@ var FADE_IN_MS = 500;
 var FADE_OUT_MS = 500;
 var DEFAULT_PING_DURATION_MS = 6e3;
 var DEFAULT_PING_COLOR = 11184810;
+var RATE_LIMIT_CAPACITY = 3;
+var RATE_LIMIT_WINDOW_MS = 5e3;
 
 // src/module/input/binding.ts
 var BUTTONS = {
@@ -130,6 +132,105 @@ function installTrigger(config) {
   };
 }
 
+// src/module/network/rate-limit.ts
+function createRateLimit(config) {
+  const { capacity, windowMs } = config;
+  const clock = config.now ?? (() => performance.now());
+  const log = /* @__PURE__ */ new Map();
+  return {
+    allow(senderId, isGM) {
+      if (isGM) return true;
+      const now = clock();
+      const cutoff = now - windowMs;
+      const prior = log.get(senderId);
+      const fresh = prior ? prior.filter((t) => t > cutoff) : [];
+      if (fresh.length >= capacity) {
+        if (fresh !== prior) log.set(senderId, fresh);
+        return false;
+      }
+      fresh.push(now);
+      log.set(senderId, fresh);
+      return true;
+    }
+  };
+}
+
+// src/module/network/messages.ts
+var SOCKET_NAME = "module.pings";
+var KINDS = /* @__PURE__ */ new Set([
+  "here",
+  "rally",
+  "alert",
+  "text",
+  "token-attach"
+]);
+function isObject(value) {
+  return typeof value === "object" && value !== null;
+}
+function isWorldPosition(value) {
+  return isObject(value) && typeof value.x === "number" && typeof value.y === "number";
+}
+function isDisplayPayload(value) {
+  if (!isObject(value)) return false;
+  return typeof value.id === "string" && typeof value.sceneId === "string" && typeof value.senderId === "string" && typeof value.kind === "string" && KINDS.has(value.kind) && isWorldPosition(value.position) && typeof value.color === "number" && typeof value.moveCanvas === "boolean" && (value.text === void 0 || typeof value.text === "string") && (value.tokenId === void 0 || typeof value.tokenId === "string");
+}
+function isRemovePayload(value) {
+  return isObject(value) && typeof value.id === "string" && typeof value.sceneId === "string";
+}
+function parseSocketMessage(raw) {
+  if (!isObject(raw)) return null;
+  if (raw.type === "displayPing" && isDisplayPayload(raw.payload)) {
+    return { type: "displayPing", payload: raw.payload };
+  }
+  if (raw.type === "removePing" && isRemovePayload(raw.payload)) {
+    return { type: "removePing", payload: raw.payload };
+  }
+  return null;
+}
+
+// src/module/network/socket.ts
+function installSocket(config) {
+  const socket = game.socket;
+  const { handlers, rateLimit, sceneIdProvider, selfIsGM } = config;
+  const onMessage = (raw) => {
+    const message = parseSocketMessage(raw);
+    if (!message) {
+      console.warn(`${MODULE_ID} | dropped malformed socket payload`);
+      return;
+    }
+    const currentSceneId = sceneIdProvider();
+    if (currentSceneId === null || message.payload.sceneId !== currentSceneId) {
+      return;
+    }
+    if (message.type === "displayPing") {
+      if (!rateLimit.allow(message.payload.senderId, false)) {
+        console.warn(
+          `${MODULE_ID} | rate-limited inbound displayPing from ${message.payload.senderId}`
+        );
+        return;
+      }
+      handlers.onDisplay(message.payload);
+    } else {
+      handlers.onRemove(message.payload);
+    }
+  };
+  socket?.on(SOCKET_NAME, onMessage);
+  return {
+    broadcast(message) {
+      if (message.type === "displayPing") {
+        if (!rateLimit.allow(message.payload.senderId, selfIsGM())) {
+          return false;
+        }
+      }
+      socket?.emit(SOCKET_NAME, message);
+      return true;
+    },
+    teardown() {
+      socket?.off(SOCKET_NAME, onMessage);
+    }
+  };
+}
+
 // src/module/render/animation.ts
 function runAnimation(container, config) {
   const { durationMs, fadeInMs, fadeOutMs, update, onComplete } = config;
@@ -213,7 +314,10 @@ function createPing(opts) {
   visual.container.y = opts.position.y;
   visual.container.alpha = 0;
   parent.addChild(visual.container);
-  const cleanup = () => {
+  let disposed = false;
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
     parent.removeChild(visual.container);
     visual.container.destroy({ children: true });
   };
@@ -222,21 +326,19 @@ function createPing(opts) {
     fadeInMs: FADE_IN_MS,
     fadeOutMs: FADE_OUT_MS,
     update: visual.update,
-    onComplete: cleanup
+    onComplete: dispose
   });
-  let destroyed = false;
   return {
     destroy() {
-      if (destroyed) return;
-      destroyed = true;
       cancel();
-      cleanup();
+      dispose();
     }
   };
 }
 
 // src/module/pings.ts
 var teardownTrigger = null;
+var socketHandle = null;
 function resolveUserColor() {
   const c = game.user?.color;
   if (typeof c === "number") return c;
@@ -251,14 +353,30 @@ function resolveUserColor() {
   }
   return DEFAULT_PING_COLOR;
 }
-function onIntent(intent) {
+function displayPingFromPayload(payload) {
   createPing({
-    kind: intent.kind,
-    position: intent.position,
-    color: resolveUserColor(),
+    kind: payload.kind,
+    position: payload.position,
+    color: payload.color,
     size: canvas.dimensions.size,
     durationMs: DEFAULT_PING_DURATION_MS
   });
+}
+function onIntent(intent) {
+  const sceneId = canvas.scene?.id;
+  const senderId = game.user?.id;
+  if (!sceneId || !senderId || !socketHandle) return;
+  const payload = {
+    id: foundry.utils.randomID(),
+    sceneId,
+    senderId,
+    kind: intent.kind,
+    position: intent.position,
+    color: resolveUserColor(),
+    moveCanvas: false
+  };
+  const sent = socketHandle.broadcast({ type: "displayPing", payload });
+  if (sent) displayPingFromPayload(payload);
 }
 function reinstallTrigger() {
   teardownTrigger?.();
@@ -280,6 +398,19 @@ Hooks.on("canvasTearDown", () => {
   teardownTrigger = null;
 });
 Hooks.once("ready", () => {
+  socketHandle = installSocket({
+    handlers: {
+      onDisplay: displayPingFromPayload,
+      onRemove: () => {
+      }
+    },
+    rateLimit: createRateLimit({
+      capacity: RATE_LIMIT_CAPACITY,
+      windowMs: RATE_LIMIT_WINDOW_MS
+    }),
+    sceneIdProvider: () => canvas.scene?.id ?? null,
+    selfIsGM: () => game.user?.isGM ?? false
+  });
   const version = game.modules?.get(MODULE_ID)?.version ?? "0.0.0";
   const api = { version };
   const globals = window;
