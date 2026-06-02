@@ -880,8 +880,14 @@ function installTrigger(config) {
       commitKind = hold.menu.getSelectedKind(ev.clientX, ev.clientY);
     }
     const commitPosition = hold.startWorld;
+    const previewDispose = hold.previewDispose;
+    hold.previewDispose = null;
     reset();
-    if (commitKind !== null) config.callbacks.commit(commitKind, commitPosition);
+    if (commitKind !== null) {
+      config.callbacks.commit(commitKind, commitPosition, previewDispose);
+    } else if (previewDispose) {
+      previewDispose();
+    }
   };
   const onPointerCancel = (ev) => {
     if (!hold || hold.pointerId !== ev.pointerId) return;
@@ -1050,8 +1056,16 @@ function showPreviewPing(position) {
     if (id !== null) apiBundle?.api.remove(id, { broadcast: false });
   };
 }
-function commitPing(kind, position) {
-  if (!apiBundle) return;
+function commitPing(kind, position, previewDispose) {
+  if (!apiBundle) {
+    previewDispose?.();
+    return;
+  }
+  if (kind === "here" && previewDispose) {
+    apiBundle.api.sendHere(position);
+    return;
+  }
+  previewDispose?.();
   if (kind === "text") {
     const text = window.prompt("Pings \u2014 text:");
     if (!text) return;
