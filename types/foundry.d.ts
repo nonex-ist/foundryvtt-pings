@@ -96,6 +96,8 @@ interface FoundryCanvasDimensions {
 
 interface FoundryScene {
     id: string;
+    getFlag(scope: string, key: string): unknown;
+    setFlag(scope: string, key: string, value: unknown): Promise<unknown>;
 }
 
 interface FoundryToken {
@@ -145,11 +147,32 @@ interface FoundrySocket {
     off(event: string, handler: FoundrySocketHandler): void;
 }
 
+interface FoundrySettingRegistration<T> {
+    name?: string;
+    hint?: string;
+    scope: 'world' | 'client';
+    config: boolean;
+    type: NumberConstructor | StringConstructor | BooleanConstructor | ObjectConstructor;
+    default: T;
+    choices?: Record<string, string>;
+    range?: { min: number; max: number; step?: number };
+    requiresReload?: boolean;
+    onChange?(value: T): void;
+}
+
+interface FoundrySettings {
+    register<T>(namespace: string, key: string, options: FoundrySettingRegistration<T>): void;
+    get<T = unknown>(namespace: string, key: string): T;
+    set<T>(namespace: string, key: string, value: T): Promise<T>;
+}
+
 interface FoundryGame {
     user?: FoundryUser;
     users?: { get(id: string): FoundryUser | undefined };
     modules?: { get(id: string): FoundryGameModule | undefined };
     socket?: FoundrySocket;
+    settings?: FoundrySettings;
+    i18n?: { localize(key: string): string };
 }
 
 interface FoundryNotifications {

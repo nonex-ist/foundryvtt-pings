@@ -1,38 +1,40 @@
 /**
  * Foundry VTT Pings — entrypoint.
  *
- * M6 scope: input + render + network + API + radial menu + all 5 ping
- * kinds. Each kind has its own visual, per-kind defaults (duration,
- * color, moveCanvas), and behaviors: rally pans receivers' viewports
- * (role-gated), alert refuses senders below Assistant (red color override,
- * 10s duration), text prompts for input on commit, token-attach finds
- * the token under the press position and follows it for ~4s.
- *
- * Still ahead: M7 audio, M8 settings UI.
+ * v0.1 surface: input + render + network + API + radial menu + 5 ping
+ * kinds + audio + game settings. All thresholds, role gates, and the
+ * audio toggle are exposed via Foundry's Module Configuration UI. The
+ * trigger and audio reconfigure live on change; rate-limit and role
+ * settings require a reload (their values are snapshot into long-lived
+ * state).
  */
 
 import { createApi, type ApiBundle, type PingsApi } from './api/index.js';
 import { createAudioController } from './audio/play.js';
-import type { DisplayPingPayload } from './network/messages.js';
-import {
-    DEFAULT_PING_COLOR,
-    HOLD_CANCEL_TOLERANCE_PX,
-    HOLD_DURATION_MS,
-    MENU_SUMMON_PX,
-    MODULE_ID,
-    RATE_LIMIT_CAPACITY,
-    RATE_LIMIT_WINDOW_MS,
-} from './constants.js';
+import { DEFAULT_PING_COLOR, MODULE_ID } from './constants.js';
 import { parseBinding } from './input/binding.js';
 import { openRadialMenu } from './input/radial-menu.js';
 import { installTrigger } from './input/trigger.js';
+import type { DisplayPingPayload } from './network/messages.js';
 import { createRateLimit } from './network/rate-limit.js';
 import { installSocket, type SocketHandle } from './network/socket.js';
+import {
+    getAudioEnabled,
+    getAudioVolume,
+    getHoldCancelTolerancePx,
+    getHoldDurationMs,
+    getMenuSummonPx,
+    getRateLimitCapacity,
+    getRateLimitWindowMs,
+    getTriggerBinding,
+    registerSettings,
+} from './settings/register.js';
 import type { PingKind, WorldPosition } from './types.js';
 
 let teardownTrigger: (() => void) | null = null;
 let socketHandle: SocketHandle | null = null;
 let apiBundle: ApiBundle | null = null;
+let audio: ReturnType<typeof createAudioController> | null = null;
 
 function resolveUserColor(): number {
     const c = game.user?.color;
@@ -68,9 +70,6 @@ function commitPing(kind: PingKind, position: WorldPosition): void {
     if (!apiBundle) return;
 
     if (kind === 'text') {
-        // window.prompt is synchronous and renders before any post-gesture
-        // pointer cleanup ─ keeps the M6 implementation dialog-free. A
-        // styled Foundry DialogV2 lands with the M8 settings UI pass.
         const text = window.prompt('Pings — text:');
         if (!text) return;
         apiBundle.api.ping('text', position, { text });
@@ -92,18 +91,27 @@ function commitPing(kind: PingKind, position: WorldPosition): void {
 
 function reinstallTrigger(): void {
     teardownTrigger?.();
+    if (!canvas.app?.view) return;
+    let binding;
+    try {
+        binding = parseBinding(getTriggerBinding());
+    } catch (err) {
+        console.warn(`${MODULE_ID} | invalid trigger binding, falling back to LeftClick`, err);
+        binding = parseBinding('LeftClick');
+    }
+    const menuPx = getMenuSummonPx();
     teardownTrigger = installTrigger({
-        binding: parseBinding('LeftClick'),
-        holdDurationMs: HOLD_DURATION_MS,
-        holdCancelTolerancePx: HOLD_CANCEL_TOLERANCE_PX,
-        menuSummonPx: MENU_SUMMON_PX,
+        binding,
+        holdDurationMs: getHoldDurationMs(),
+        holdCancelTolerancePx: getHoldCancelTolerancePx(),
+        menuSummonPx: menuPx,
         callbacks: {
             showPreview: showPreviewPing,
             openMenu: (clientPosition) =>
                 openRadialMenu({
                     clientX: clientPosition.x,
                     clientY: clientPosition.y,
-                    deadzonePx: MENU_SUMMON_PX,
+                    deadzonePx: menuPx,
                 }),
             commit: commitPing,
         },
@@ -111,6 +119,13 @@ function reinstallTrigger(): void {
 }
 
 Hooks.once('init', () => {
+    registerSettings({
+        onTriggerChanged: () => {
+            if (canvas.ready) reinstallTrigger();
+        },
+        onAudioEnabledChanged: (enabled) => audio?.setEnabled(enabled),
+        onAudioVolumeChanged: (volume) => audio?.setVolume(volume),
+    });
     console.log(`${MODULE_ID} | init`);
 });
 
@@ -126,10 +141,13 @@ Hooks.on('canvasTearDown', () => {
 Hooks.once('ready', () => {
     const version = game.modules?.get(MODULE_ID)?.version ?? '0.0.0';
 
-    const audio = createAudioController();
+    audio = createAudioController();
+    audio.setEnabled(getAudioEnabled());
+    audio.setVolume(getAudioVolume());
+
     Hooks.on('pings.display', (_handle: unknown, payload: unknown) => {
         const kind = (payload as DisplayPingPayload | undefined)?.kind;
-        if (kind) audio.play(kind);
+        if (kind) audio?.play(kind);
     });
 
     apiBundle = createApi({
@@ -148,8 +166,8 @@ Hooks.once('ready', () => {
             onRemove: apiBundle.handleInboundRemove,
         },
         rateLimit: createRateLimit({
-            capacity: RATE_LIMIT_CAPACITY,
-            windowMs: RATE_LIMIT_WINDOW_MS,
+            capacity: getRateLimitCapacity(),
+            windowMs: getRateLimitWindowMs(),
         }),
         sceneIdProvider: () => canvas.scene?.id ?? null,
         isUserGM: (userId) => game.users?.get(userId)?.isGM ?? false,
