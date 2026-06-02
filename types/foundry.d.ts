@@ -192,6 +192,21 @@ interface FoundryControlsLayerCtor {
     };
 }
 
+interface FoundryDialogV2Button {
+    label?: string;
+    icon?: string;
+    default?: boolean;
+    action?: string;
+}
+
+interface FoundryDialogV2Config {
+    window?: { title?: string };
+    content?: string;
+    ok?: FoundryDialogV2Button;
+    rejectClose?: boolean;
+    position?: { width?: number };
+}
+
 declare const foundry: {
     utils: {
         randomID(length?: number): string;
@@ -199,6 +214,16 @@ declare const foundry: {
     canvas?: {
         layers?: {
             ControlsLayer?: FoundryControlsLayerCtor;
+        };
+    };
+    applications?: {
+        api?: {
+            DialogV2?: {
+                /** Form-input dialog. Resolves to the form's parsed values (`{ [name]: value }`), or `null` if the user dismissed the dialog. */
+                input(config: FoundryDialogV2Config): Promise<Record<string, unknown> | null>;
+                /** Plain prompt dialog. Resolves to whatever the OK button's callback returned, or `null` on dismiss. */
+                prompt(config: FoundryDialogV2Config): Promise<unknown>;
+            };
         };
     };
 };

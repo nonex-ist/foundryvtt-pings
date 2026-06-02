@@ -11,11 +11,17 @@ export const FADE_IN_MS = 500;
 export const FADE_OUT_MS = 500;
 export const DEFAULT_PING_COLOR = 0xaaaaaa;
 
-/** Per-kind default visible duration. Alert is held longer because it commands attention; token-attach is shorter so the visual doesn't obscure the followed token. */
+/**
+ * Per-kind default visible duration. Alert is shorter than here despite
+ * commanding more attention — its rotation + pulse compounds wear, so 5s
+ * does the same "look right now" work that here needs 6s to do. Token-
+ * attach is shorter still so the visual doesn't obscure the token it
+ * follows.
+ */
 export const KIND_DEFAULT_DURATION_MS: Record<PingKind, number> = {
     here: 6000,
     rally: 6000,
-    alert: 10000,
+    alert: 5000,
     text: 6000,
     'token-attach': 4000,
 };

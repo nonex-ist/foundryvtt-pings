@@ -9,7 +9,7 @@ var DEFAULT_PING_COLOR = 11184810;
 var KIND_DEFAULT_DURATION_MS = {
   here: 6e3,
   rally: 6e3,
-  alert: 1e4,
+  alert: 5e3,
   text: 6e3,
   "token-attach": 4e3
 };
@@ -1091,6 +1091,22 @@ function showPreviewBundle(worldPosition, clientPosition) {
     menu
   };
 }
+async function promptForTextPing(position) {
+  const dialog = foundry.applications?.api?.DialogV2;
+  if (!dialog) {
+    const text2 = window.prompt("Pings \u2014 text:");
+    if (text2) apiBundle?.api.ping("text", position, { text: text2 });
+    return;
+  }
+  const result = await dialog.input({
+    window: { title: "Pings \u2014 text" },
+    content: '<div class="form-group"><label>Text</label><input type="text" name="text" autofocus required maxlength="200" /></div>',
+    ok: { label: "Ping", icon: "fa-solid fa-location-crosshairs" }
+  });
+  const text = result?.text?.trim();
+  if (!text) return;
+  apiBundle?.api.ping("text", position, { text });
+}
 function commitPing(kind, position, previewDispose) {
   if (!apiBundle) {
     previewDispose?.();
@@ -1103,9 +1119,7 @@ function commitPing(kind, position, previewDispose) {
   }
   previewDispose?.();
   if (kind === "text") {
-    const text = window.prompt("Pings \u2014 text:");
-    if (!text) return;
-    apiBundle.api.ping("text", position, { text });
+    void promptForTextPing(position);
     return;
   }
   if (kind === "token-attach") {

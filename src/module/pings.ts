@@ -92,6 +92,30 @@ function showPreviewBundle(
     };
 }
 
+async function promptForTextPing(position: WorldPosition): Promise<void> {
+    const dialog = foundry.applications?.api?.DialogV2;
+    if (!dialog) {
+        // Fallback for environments without DialogV2 — shouldn't happen on
+        // v14, but the graceful degradation keeps text-pings working if
+        // Foundry ever moves the dialog API again.
+        const text = window.prompt('Pings — text:');
+        if (text) apiBundle?.api.ping('text', position, { text });
+        return;
+    }
+    const result = (await dialog.input({
+        window: { title: 'Pings — text' },
+        content:
+            '<div class="form-group"><label>Text</label>' +
+            '<input type="text" name="text" autofocus required maxlength="200" />' +
+            '</div>',
+        ok: { label: 'Ping', icon: 'fa-solid fa-location-crosshairs' },
+    })) as { text?: string } | null;
+
+    const text = result?.text?.trim();
+    if (!text) return;
+    apiBundle?.api.ping('text', position, { text });
+}
+
 function commitPing(
     kind: PingKind,
     position: WorldPosition,
@@ -120,9 +144,10 @@ function commitPing(
     previewDispose?.();
 
     if (kind === 'text') {
-        const text = window.prompt('Pings — text:');
-        if (!text) return;
-        apiBundle.api.ping('text', position, { text });
+        // Fire-and-forget the dialog; the outer commit is sync because
+        // the trigger doesn't await it. The dialog opens after the
+        // gesture has fully cleared, so cancellation just no-ops.
+        void promptForTextPing(position);
         return;
     }
 
