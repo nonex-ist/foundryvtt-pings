@@ -9,6 +9,8 @@ export interface DisplayPingPayload {
     kind: PingKind;
     position: WorldPosition;
     color: number;
+    /** Overrides the recipient's default duration so all peers see the same lifetime. Positive integer milliseconds. */
+    durationMs?: number;
     text?: string;
     tokenId?: string;
     moveCanvas: boolean;
@@ -51,6 +53,10 @@ function isDisplayPayload(value: unknown): value is DisplayPingPayload {
         typeof value.color === 'number' &&
         Number.isFinite(value.color) &&
         typeof value.moveCanvas === 'boolean' &&
+        (value.durationMs === undefined ||
+            (typeof value.durationMs === 'number' &&
+                Number.isInteger(value.durationMs) &&
+                value.durationMs > 0)) &&
         (value.text === undefined || typeof value.text === 'string') &&
         (value.tokenId === undefined || typeof value.tokenId === 'string')
     );
