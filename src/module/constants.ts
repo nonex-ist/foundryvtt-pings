@@ -2,6 +2,8 @@ export const MODULE_ID = 'pings';
 
 export const HOLD_DURATION_MS = 350;
 export const HOLD_CANCEL_TOLERANCE_PX = 5;
+/** Drag distance past which a held trigger summons the radial menu. Doubles as the menu's center-deadzone radius on release. */
+export const MENU_SUMMON_PX = 25;
 
 export const FADE_IN_MS = 500;
 export const FADE_OUT_MS = 500;

@@ -1,15 +1,14 @@
 /**
  * Foundry VTT Pings — entrypoint.
  *
- * M4 scope: input + render + network + public API. The hold trigger calls
- * the API's `here` method, which now owns the build-payload + preDisplay +
- * broadcast + local-display pipeline. Inbound socket messages route to the
- * API's inbound handlers so peer-driven removals share the same registry
- * as `api.remove(id)`. The API is published at
- * `game.modules.get('pings').api` and mirrored on `window.NonexIst.Pings`.
+ * M5 scope: input + render + network + API + radial menu. The hold trigger
+ * runs a 4-phase gesture: hold (350ms) → preview (local-only here ping
+ * appears) → menu (drag ≥25px opens cardinal selector) → commit. Tap-and-
+ * release commits "here"; drag in 4 directions commits rally / alert /
+ * text / token-attach via the radial menu.
  *
- * Still ahead: M5 radial menu, M6 specialized ping kinds, M7 audio,
- * M8 settings UI.
+ * Still ahead: M6 specialized ping kinds (real visuals + behaviors),
+ * M7 audio, M8 settings UI.
  */
 
 import { createApi, type ApiBundle, type PingsApi } from './api/index.js';
@@ -17,15 +16,17 @@ import {
     DEFAULT_PING_COLOR,
     HOLD_CANCEL_TOLERANCE_PX,
     HOLD_DURATION_MS,
+    MENU_SUMMON_PX,
     MODULE_ID,
     RATE_LIMIT_CAPACITY,
     RATE_LIMIT_WINDOW_MS,
 } from './constants.js';
 import { parseBinding } from './input/binding.js';
+import { openRadialMenu } from './input/radial-menu.js';
 import { installTrigger } from './input/trigger.js';
 import { createRateLimit } from './network/rate-limit.js';
 import { installSocket, type SocketHandle } from './network/socket.js';
-import type { PingIntent } from './types.js';
+import type { PingKind, WorldPosition } from './types.js';
 
 let teardownTrigger: (() => void) | null = null;
 let socketHandle: SocketHandle | null = null;
@@ -46,8 +47,23 @@ function resolveUserColor(): number {
     return DEFAULT_PING_COLOR;
 }
 
-function onIntent(intent: PingIntent): void {
-    apiBundle?.api.here(intent.position);
+function showPreviewPing(position: WorldPosition): () => void {
+    const id = apiBundle?.api.showHere(position) ?? null;
+    return () => {
+        if (id !== null) apiBundle?.api.remove(id, { broadcast: false });
+    };
+}
+
+function commitPing(kind: PingKind, position: WorldPosition): void {
+    if (kind === 'here') {
+        // The preview is still on screen at the same position with the user's
+        // color; broadcasting via sendHere lets peers see their own ping
+        // without us doubling up the local visual. The two ids diverge but
+        // the local user never sees both at once.
+        apiBundle?.api.sendHere(position);
+    } else {
+        apiBundle?.api.ping(kind, position);
+    }
 }
 
 function reinstallTrigger(): void {
@@ -56,7 +72,17 @@ function reinstallTrigger(): void {
         binding: parseBinding('LeftClick'),
         holdDurationMs: HOLD_DURATION_MS,
         holdCancelTolerancePx: HOLD_CANCEL_TOLERANCE_PX,
-        onIntent,
+        menuSummonPx: MENU_SUMMON_PX,
+        callbacks: {
+            showPreview: showPreviewPing,
+            openMenu: (clientPosition) =>
+                openRadialMenu({
+                    clientX: clientPosition.x,
+                    clientY: clientPosition.y,
+                    deadzonePx: MENU_SUMMON_PX,
+                }),
+            commit: commitPing,
+        },
     });
 }
 

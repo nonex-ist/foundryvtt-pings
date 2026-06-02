@@ -2,13 +2,16 @@ import { DEFAULT_PING_DURATION_MS } from '../constants.js';
 import type { DisplayPingPayload, RemovePingPayload } from '../network/messages.js';
 import type { SocketHandle } from '../network/socket.js';
 import { createPing, type PingHandle } from '../render/ping.js';
-import type { WorldPosition } from '../types.js';
+import type { PingKind, WorldPosition } from '../types.js';
 import { assertColor, assertId, assertPosition, assertPositiveInt } from './validators.js';
 
-export interface HereOptions {
+export interface PingOptions {
     color?: number;
     durationMs?: number;
 }
+
+/** Backwards-compatible alias for the `here`-family options shape. */
+export type HereOptions = PingOptions;
 
 export interface RemoveOptions {
     /** If true, also broadcasts a removePing message to peers. Defaults to true. */
@@ -18,13 +21,22 @@ export interface RemoveOptions {
 export interface PingsApi {
     readonly version: string;
 
-    /** Display a "here" ping locally and broadcast it. Returns the ping id, or null if rate-limited / canceled by `pings.preDisplay`. */
+    /** Display a ping of the given kind locally and broadcast it. Returns the ping id, or null if rate-limited / canceled by `pings.preDisplay`. */
+    ping(kind: PingKind, position: WorldPosition, opts?: PingOptions): string | null;
+
+    /** Display a ping of the given kind locally only — no broadcast. */
+    showPing(kind: PingKind, position: WorldPosition, opts?: PingOptions): string | null;
+
+    /** Broadcast a ping of the given kind to peers without displaying locally. */
+    sendPing(kind: PingKind, position: WorldPosition, opts?: PingOptions): string | null;
+
+    /** Convenience wrapper for `ping('here', position, opts)`. */
     here(position: WorldPosition, opts?: HereOptions): string | null;
 
-    /** Display a "here" ping locally only — no broadcast. */
+    /** Convenience wrapper for `showPing('here', position, opts)`. */
     showHere(position: WorldPosition, opts?: HereOptions): string | null;
 
-    /** Broadcast a "here" ping to peers without displaying locally. */
+    /** Convenience wrapper for `sendPing('here', position, opts)`. */
     sendHere(position: WorldPosition, opts?: HereOptions): string | null;
 
     /** Remove a ping by id locally; broadcasts the removal to peers by default. */
@@ -85,7 +97,11 @@ export function createApi(config: CreateApiConfig): ApiBundle {
         return handle;
     }
 
-    function buildHerePayload(position: WorldPosition, opts: HereOptions | undefined): DisplayPingPayload | null {
+    function buildPayload(
+        kind: PingKind,
+        position: WorldPosition,
+        opts: PingOptions | undefined,
+    ): DisplayPingPayload | null {
         assertPosition(position);
         const color = opts?.color !== undefined ? assertColor(opts.color) : config.senderColorProvider();
         const durationMs =
@@ -101,7 +117,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
             id: foundry.utils.randomID(),
             sceneId,
             senderId,
-            kind: 'here',
+            kind,
             position,
             color,
             moveCanvas: false,
@@ -110,34 +126,40 @@ export function createApi(config: CreateApiConfig): ApiBundle {
         return payload;
     }
 
+    function ping(kind: PingKind, position: WorldPosition, opts: PingOptions | undefined): string | null {
+        const payload = buildPayload(kind, position, opts);
+        if (!payload) return null;
+        if (!Hooks.call('pings.preDisplay', payload)) return null;
+        if (!config.socketProvider()?.broadcast({ type: 'displayPing', payload })) return null;
+        displayLocally(payload);
+        return payload.id;
+    }
+
+    function showPing(kind: PingKind, position: WorldPosition, opts: PingOptions | undefined): string | null {
+        const payload = buildPayload(kind, position, opts);
+        if (!payload) return null;
+        if (!Hooks.call('pings.preDisplay', payload)) return null;
+        displayLocally(payload);
+        return payload.id;
+    }
+
+    function sendPing(kind: PingKind, position: WorldPosition, opts: PingOptions | undefined): string | null {
+        const payload = buildPayload(kind, position, opts);
+        if (!payload) return null;
+        if (!Hooks.call('pings.preDisplay', payload)) return null;
+        if (!config.socketProvider()?.broadcast({ type: 'displayPing', payload })) return null;
+        return payload.id;
+    }
+
     return {
         api: {
             version: config.version,
-
-            here(position, opts) {
-                const payload = buildHerePayload(position, opts);
-                if (!payload) return null;
-                if (!Hooks.call('pings.preDisplay', payload)) return null;
-                if (!config.socketProvider()?.broadcast({ type: 'displayPing', payload })) return null;
-                displayLocally(payload);
-                return payload.id;
-            },
-
-            showHere(position, opts) {
-                const payload = buildHerePayload(position, opts);
-                if (!payload) return null;
-                if (!Hooks.call('pings.preDisplay', payload)) return null;
-                displayLocally(payload);
-                return payload.id;
-            },
-
-            sendHere(position, opts) {
-                const payload = buildHerePayload(position, opts);
-                if (!payload) return null;
-                if (!Hooks.call('pings.preDisplay', payload)) return null;
-                if (!config.socketProvider()?.broadcast({ type: 'displayPing', payload })) return null;
-                return payload.id;
-            },
+            ping,
+            showPing,
+            sendPing,
+            here: (position, opts) => ping('here', position, opts),
+            showHere: (position, opts) => showPing('here', position, opts),
+            sendHere: (position, opts) => sendPing('here', position, opts),
 
             remove(id, opts) {
                 assertId(id);
