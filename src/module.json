@@ -27,6 +27,17 @@
       "path": "lang/en.json"
     }
   ],
+  "media": [
+    {
+      "type": "setup",
+      "url": "modules/pings/assets/pings_cover.webp",
+      "thumbnail": "modules/pings/assets/pings_thumbnail.webp"
+    },
+    {
+      "type": "icon",
+      "url": "modules/pings/assets/pings_icon.webp"
+    }
+  ],
   "url": "https://github.com/nonex-ist/foundryvtt-pings",
   "manifest": "https://github.com/nonex-ist/foundryvtt-pings/releases/latest/download/module.json",
   "download": "https://github.com/nonex-ist/foundryvtt-pings/releases/latest/download/pings.zip",
