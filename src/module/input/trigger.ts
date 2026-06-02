@@ -11,6 +11,24 @@ export interface PreviewBundle {
 
 export interface TriggerCallbacks {
     /**
+     * Fired immediately at `pointerdown` once the binding matches —
+     * before the 350ms hold timer starts. Use this to set up state that
+     * needs to be in place from the very first frame of the gesture
+     * (e.g. locking the token under the cursor so Foundry's drag-to-move
+     * doesn't run away with the press). Always paired with a later
+     * `onReleaseMatched` (whether the gesture commits or cancels).
+     */
+    onPressMatched?(worldPosition: WorldPosition, clientPosition: { x: number; y: number }): void;
+
+    /**
+     * Fired at `pointerup` or `pointercancel` when a matching hold was
+     * in progress, regardless of whether the gesture committed or
+     * canceled. Pairs with `onPressMatched` for setup/teardown of
+     * gesture-scoped state.
+     */
+    onReleaseMatched?(): void;
+
+    /**
      * The hold has matured (350ms passed without exceeding the 5px cancel
      * tolerance). Mount the preview ping AND the radial menu (the menu
      * starts in passive mode — visible-but-dim, signaling availability).
@@ -138,6 +156,10 @@ export function installTrigger(config: TriggerConfig): () => void {
             previewDispose: null,
             menu: null,
         };
+        config.callbacks.onPressMatched?.(startWorld, {
+            x: startClientX,
+            y: startClientY,
+        });
     };
 
     const onPointerMove = (ev: PointerEvent): void => {
@@ -184,6 +206,7 @@ export function installTrigger(config: TriggerConfig): () => void {
         const previewDispose = hold.previewDispose;
         hold.previewDispose = null;
         reset();
+        config.callbacks.onReleaseMatched?.();
         if (commitKind !== null) {
             config.callbacks.commit(commitKind, commitPosition, previewDispose);
         } else if (previewDispose) {
@@ -194,6 +217,7 @@ export function installTrigger(config: TriggerConfig): () => void {
     const onPointerCancel = (ev: PointerEvent): void => {
         if (!hold || hold.pointerId !== ev.pointerId) return;
         reset();
+        config.callbacks.onReleaseMatched?.();
     };
 
     view.addEventListener('pointerdown', onPointerDown);

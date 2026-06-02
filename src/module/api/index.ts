@@ -62,6 +62,15 @@ export interface ApiBundle {
     api: PingsApi;
     handleInboundDisplay(payload: DisplayPingPayload): void;
     handleInboundRemove(payload: RemovePingPayload): void;
+    /**
+     * Lock a token's movement reference-counted. Shares the same set the
+     * attach-ping lifecycle plugs into, so a gesture lock and an attach
+     * lock on the same token compose cleanly: the token only becomes
+     * movable again once both have been released.
+     */
+    lockTokenMovement(tokenId: string): void;
+    /** Release a single ref of the token-movement lock; idempotent below zero. */
+    unlockTokenMovement(tokenId: string): void;
 }
 
 function warnUser(message: string): void {
@@ -320,5 +329,8 @@ export function createApi(config: CreateApiConfig): ApiBundle {
             registry.delete(payload.id);
             handle?.destroy();
         },
+
+        lockTokenMovement: trackAttach,
+        unlockTokenMovement: untrackAttach,
     };
 }

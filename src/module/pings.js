@@ -710,7 +710,9 @@ function createApi(config) {
       const handle = registry.get(payload.id);
       registry.delete(payload.id);
       handle?.destroy();
-    }
+    },
+    lockTokenMovement: trackAttach,
+    unlockTokenMovement: untrackAttach
   };
 }
 
@@ -929,6 +931,10 @@ function installTrigger(config) {
       previewDispose: null,
       menu: null
     };
+    config.callbacks.onPressMatched?.(startWorld, {
+      x: startClientX,
+      y: startClientY
+    });
   };
   const onPointerMove = (ev) => {
     if (!hold || hold.pointerId !== ev.pointerId) return;
@@ -963,6 +969,7 @@ function installTrigger(config) {
     const previewDispose = hold.previewDispose;
     hold.previewDispose = null;
     reset();
+    config.callbacks.onReleaseMatched?.();
     if (commitKind !== null) {
       config.callbacks.commit(commitKind, commitPosition, previewDispose);
     } else if (previewDispose) {
@@ -972,6 +979,7 @@ function installTrigger(config) {
   const onPointerCancel = (ev) => {
     if (!hold || hold.pointerId !== ev.pointerId) return;
     reset();
+    config.callbacks.onReleaseMatched?.();
   };
   view.addEventListener("pointerdown", onPointerDown);
   view.addEventListener("pointermove", onPointerMove);
@@ -1109,6 +1117,8 @@ var teardownTrigger = null;
 var socketHandle = null;
 var apiBundle = null;
 var audio = null;
+var gestureLockedTokenId = null;
+var GESTURE_UNLOCK_GRACE_MS = 80;
 function resolveUserColor() {
   const c = game.user?.color;
   if (typeof c === "number") return c;
@@ -1206,6 +1216,21 @@ function reinstallTrigger() {
     holdCancelTolerancePx: getHoldCancelTolerancePx(),
     menuSummonPx: getMenuSummonPx(),
     callbacks: {
+      onPressMatched: (worldPos) => {
+        const tokenId = findTokenIdAt(worldPos);
+        if (!tokenId || !apiBundle) return;
+        apiBundle.lockTokenMovement(tokenId);
+        gestureLockedTokenId = tokenId;
+      },
+      onReleaseMatched: () => {
+        const id = gestureLockedTokenId;
+        gestureLockedTokenId = null;
+        if (!id) return;
+        setTimeout(
+          () => apiBundle?.unlockTokenMovement(id),
+          GESTURE_UNLOCK_GRACE_MS
+        );
+      },
       showPreview: showPreviewBundle,
       commit: commitPing
     }
