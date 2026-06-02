@@ -1,4 +1,4 @@
-import { DEFAULT_PING_DURATION_MS } from '../constants.js';
+import { ALERT_COLOR, KIND_DEFAULT_DURATION_MS, MIN_ALERT_ROLE, MIN_RALLY_ROLE, MODULE_ID } from '../constants.js';
 import type { DisplayPingPayload, RemovePingPayload } from '../network/messages.js';
 import type { SocketHandle } from '../network/socket.js';
 import { createPing, type PingHandle } from '../render/ping.js';
@@ -14,6 +14,12 @@ import {
 export interface PingOptions {
     color?: number;
     durationMs?: number;
+    /** Required for the `text` kind, ignored otherwise. */
+    text?: string;
+    /** Required for the `token-attach` kind, ignored otherwise. */
+    tokenId?: string;
+    /** Override the kind's default — rally defaults true, others false. */
+    moveCanvas?: boolean;
 }
 
 /** Backwards-compatible alias for the `here`-family options shape. */
@@ -26,26 +32,12 @@ export interface RemoveOptions {
 
 export interface PingsApi {
     readonly version: string;
-
-    /** Display a ping of the given kind locally and broadcast it. Returns the ping id, or null if rate-limited / canceled by `pings.preDisplay`. */
     ping(kind: PingKind, position: WorldPosition, opts?: PingOptions): string | null;
-
-    /** Display a ping of the given kind locally only — no broadcast. */
     showPing(kind: PingKind, position: WorldPosition, opts?: PingOptions): string | null;
-
-    /** Broadcast a ping of the given kind to peers without displaying locally. */
     sendPing(kind: PingKind, position: WorldPosition, opts?: PingOptions): string | null;
-
-    /** Convenience wrapper for `ping('here', position, opts)`. */
     here(position: WorldPosition, opts?: HereOptions): string | null;
-
-    /** Convenience wrapper for `showPing('here', position, opts)`. */
     showHere(position: WorldPosition, opts?: HereOptions): string | null;
-
-    /** Convenience wrapper for `sendPing('here', position, opts)`. */
     sendHere(position: WorldPosition, opts?: HereOptions): string | null;
-
-    /** Remove a ping by id locally; broadcasts the removal to peers by default. */
     remove(id: string, opts?: RemoveOptions): void;
 }
 
@@ -54,50 +46,73 @@ export interface CreateApiConfig {
     sceneIdProvider(): string | null;
     senderIdProvider(): string | null;
     senderColorProvider(): number;
+    /** Local user's role (CONST.USER_ROLES value). Used for alert sender gate + rally pan gate. */
+    userRoleProvider(): number;
     canvasSizeProvider(): number;
-    /**
-     * Provider rather than a value so the API can be constructed before
-     * the socket layer is installed (init-time order constraint with the
-     * socket installer that references the API's inbound handlers).
-     */
     socketProvider(): SocketHandle | null;
 }
 
 export interface ApiBundle {
     api: PingsApi;
-    /** Display a peer's ping locally after the socket layer has validated it. */
     handleInboundDisplay(payload: DisplayPingPayload): void;
-    /** Remove a peer-requested ping locally. */
     handleInboundRemove(payload: RemovePingPayload): void;
 }
 
-/**
- * Build the public API along with its inbound-socket handlers. Both share a
- * single registry so `api.remove(id)` and peer-driven removals operate on
- * the same set of live pings.
- *
- * `pings.preDisplay(payload)` fires before any user-visible side-effect (local
- * render or broadcast). Returning `false` cancels everything for that payload
- * — the integration seam systems like OD6S use to suppress pings on
- * cutscene scenes etc.
- *
- * `pings.display(handle, payload)` fires once the local render starts. Use it
- * for audio cues, logging, sticky overlays, etc.
- */
+function warnUser(message: string): void {
+    if (typeof ui !== 'undefined' && ui?.notifications) {
+        ui.notifications.warn(message);
+    } else {
+        console.warn(`${MODULE_ID} | ${message}`);
+    }
+}
+
 export function createApi(config: CreateApiConfig): ApiBundle {
     const registry = new Map<string, PingHandle>();
 
     function displayLocally(payload: DisplayPingPayload): PingHandle | null {
+        // token-attach: rebuild position each frame from the followed token.
+        let positionProvider: (() => WorldPosition) | undefined;
+        if (payload.kind === 'token-attach' && payload.tokenId) {
+            const tokenId = payload.tokenId;
+            const fallback = payload.position;
+            positionProvider = () => canvas.tokens?.get(tokenId)?.center ?? fallback;
+        }
+
         const handle = createPing({
             kind: payload.kind,
             position: payload.position,
             color: payload.color,
             size: config.canvasSizeProvider(),
-            durationMs: payload.durationMs ?? DEFAULT_PING_DURATION_MS,
+            durationMs: payload.durationMs ?? KIND_DEFAULT_DURATION_MS[payload.kind],
+            text: payload.text,
+            positionProvider,
             onDispose: () => {
                 registry.delete(payload.id);
             },
         });
+
+        // rally: pan recipients into view if their role allows it.
+        if (
+            payload.kind === 'rally' &&
+            payload.moveCanvas &&
+            config.userRoleProvider() >= MIN_RALLY_ROLE
+        ) {
+            void canvas.animatePan({ x: payload.position.x, y: payload.position.y, duration: 250 });
+        }
+
+        // Offscreen arrow indicator — rally is exempt because it already pans
+        // the camera; other kinds may land off-viewport and need the hint.
+        if (payload.kind !== 'rally' && canvas.controls?.drawOffscreenPing) {
+            try {
+                canvas.controls.drawOffscreenPing(payload.position, {
+                    color: payload.color,
+                    duration: payload.durationMs ?? KIND_DEFAULT_DURATION_MS[payload.kind],
+                });
+            } catch (err) {
+                console.warn(`${MODULE_ID} | drawOffscreenPing failed`, err);
+            }
+        }
+
         registry.set(payload.id, handle);
         Hooks.callAll('pings.display', handle, payload);
         return handle;
@@ -110,11 +125,47 @@ export function createApi(config: CreateApiConfig): ApiBundle {
     ): DisplayPingPayload | null {
         assertKind(kind);
         assertPosition(position);
-        const color = opts?.color !== undefined ? assertColor(opts.color) : config.senderColorProvider();
+
+        let color: number;
+        if (opts?.color !== undefined) {
+            color = assertColor(opts.color);
+        } else if (kind === 'alert') {
+            color = ALERT_COLOR;
+        } else {
+            color = config.senderColorProvider();
+        }
+
         const durationMs =
             opts?.durationMs !== undefined
                 ? assertPositiveInt(opts.durationMs, 'durationMs')
-                : undefined;
+                : KIND_DEFAULT_DURATION_MS[kind];
+
+        let moveCanvas: boolean;
+        if (opts?.moveCanvas !== undefined) {
+            if (typeof opts.moveCanvas !== 'boolean') {
+                throw new TypeError('pings: moveCanvas must be a boolean');
+            }
+            moveCanvas = opts.moveCanvas;
+        } else {
+            moveCanvas = kind === 'rally';
+        }
+
+        if (opts?.text !== undefined && typeof opts.text !== 'string') {
+            throw new TypeError('pings: text must be a string');
+        }
+        if (opts?.tokenId !== undefined && (typeof opts.tokenId !== 'string' || opts.tokenId.length === 0)) {
+            throw new TypeError('pings: tokenId must be a non-empty string');
+        }
+
+        // Required-options check per kind: text needs a non-empty string,
+        // token-attach needs a tokenId — otherwise the resulting ping is
+        // either a blank tag or a stationary "attached" ping going nowhere.
+        if (kind === 'text' && (opts?.text === undefined || opts.text.length === 0)) {
+            throw new TypeError("pings: kind 'text' requires a non-empty `text` option");
+        }
+        if (kind === 'token-attach' && opts?.tokenId === undefined) {
+            throw new TypeError("pings: kind 'token-attach' requires a `tokenId` option");
+        }
 
         const sceneId = config.sceneIdProvider();
         const senderId = config.senderIdProvider();
@@ -127,13 +178,25 @@ export function createApi(config: CreateApiConfig): ApiBundle {
             kind,
             position,
             color,
-            moveCanvas: false,
+            durationMs,
+            moveCanvas,
         };
-        if (durationMs !== undefined) payload.durationMs = durationMs;
+        if (opts?.text !== undefined) payload.text = opts.text;
+        if (opts?.tokenId !== undefined) payload.tokenId = opts.tokenId;
         return payload;
     }
 
+    /** Sender-side role gate: refuses to emit alert pings below Assistant. */
+    function checkSenderRole(kind: PingKind): boolean {
+        if (kind === 'alert' && config.userRoleProvider() < MIN_ALERT_ROLE) {
+            warnUser('Alert pings require Assistant role or higher.');
+            return false;
+        }
+        return true;
+    }
+
     function ping(kind: PingKind, position: WorldPosition, opts: PingOptions | undefined): string | null {
+        if (!checkSenderRole(kind)) return null;
         const payload = buildPayload(kind, position, opts);
         if (!payload) return null;
         if (!Hooks.call('pings.preDisplay', payload)) return null;
@@ -143,6 +206,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
     }
 
     function showPing(kind: PingKind, position: WorldPosition, opts: PingOptions | undefined): string | null {
+        if (!checkSenderRole(kind)) return null;
         const payload = buildPayload(kind, position, opts);
         if (!payload) return null;
         if (!Hooks.call('pings.preDisplay', payload)) return null;
@@ -151,6 +215,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
     }
 
     function sendPing(kind: PingKind, position: WorldPosition, opts: PingOptions | undefined): string | null {
+        if (!checkSenderRole(kind)) return null;
         const payload = buildPayload(kind, position, opts);
         if (!payload) return null;
         if (!Hooks.call('pings.preDisplay', payload)) return null;

@@ -1,14 +1,14 @@
 /**
  * Foundry VTT Pings — entrypoint.
  *
- * M5 scope: input + render + network + API + radial menu. The hold trigger
- * runs a 4-phase gesture: hold (350ms) → preview (local-only here ping
- * appears) → menu (drag ≥25px opens cardinal selector) → commit. Tap-and-
- * release commits "here"; drag in 4 directions commits rally / alert /
- * text / token-attach via the radial menu.
+ * M6 scope: input + render + network + API + radial menu + all 5 ping
+ * kinds. Each kind has its own visual, per-kind defaults (duration,
+ * color, moveCanvas), and behaviors: rally pans receivers' viewports
+ * (role-gated), alert refuses senders below Assistant (red color override,
+ * 10s duration), text prompts for input on commit, token-attach finds
+ * the token under the press position and follows it for ~4s.
  *
- * Still ahead: M6 specialized ping kinds (real visuals + behaviors),
- * M7 audio, M8 settings UI.
+ * Still ahead: M7 audio, M8 settings UI.
  */
 
 import { createApi, type ApiBundle, type PingsApi } from './api/index.js';
@@ -47,6 +47,14 @@ function resolveUserColor(): number {
     return DEFAULT_PING_COLOR;
 }
 
+function findTokenIdAt(position: WorldPosition): string | null {
+    const placeables = canvas.tokens?.placeables ?? [];
+    for (const token of placeables) {
+        if (token.bounds.contains(position.x, position.y)) return token.id;
+    }
+    return null;
+}
+
 function showPreviewPing(position: WorldPosition): () => void {
     const id = apiBundle?.api.showHere(position) ?? null;
     return () => {
@@ -55,10 +63,29 @@ function showPreviewPing(position: WorldPosition): () => void {
 }
 
 function commitPing(kind: PingKind, position: WorldPosition): void {
-    // The trigger's reset() disposes the preview *before* invoking commit,
-    // so we always need a fresh local display in addition to broadcasting —
-    // single path through api.ping for every kind.
-    apiBundle?.api.ping(kind, position);
+    if (!apiBundle) return;
+
+    if (kind === 'text') {
+        // window.prompt is synchronous and renders before any post-gesture
+        // pointer cleanup ─ keeps the M6 implementation dialog-free. A
+        // styled Foundry DialogV2 lands with the M8 settings UI pass.
+        const text = window.prompt('Pings — text:');
+        if (!text) return;
+        apiBundle.api.ping('text', position, { text });
+        return;
+    }
+
+    if (kind === 'token-attach') {
+        const tokenId = findTokenIdAt(position);
+        if (!tokenId) {
+            ui?.notifications?.warn('Pings: no token under the cursor.');
+            return;
+        }
+        apiBundle.api.ping('token-attach', position, { tokenId });
+        return;
+    }
+
+    apiBundle.api.ping(kind, position);
 }
 
 function reinstallTrigger(): void {
@@ -102,6 +129,7 @@ Hooks.once('ready', () => {
         sceneIdProvider: () => canvas.scene?.id ?? null,
         senderIdProvider: () => game.user?.id ?? null,
         senderColorProvider: resolveUserColor,
+        userRoleProvider: () => game.user?.role ?? 0,
         canvasSizeProvider: () => canvas.dimensions.size,
         socketProvider: () => socketHandle,
     });
