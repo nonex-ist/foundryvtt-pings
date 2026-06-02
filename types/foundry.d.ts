@@ -111,6 +111,17 @@ interface FoundryTokenLayer {
     placeables: ReadonlyArray<FoundryToken>;
 }
 
+interface FoundryMouseInteractionManager {
+    /**
+     * Cancel the manager's current interaction (drag, click, etc.) and
+     * reset its state to HOVER. If a drag was in progress the dragged
+     * target snaps back to its original position. Safe to call when no
+     * interaction is in flight — it short-circuits via state check.
+     * Event arg is optional; if omitted, Foundry synthesizes one.
+     */
+    cancel(event?: unknown): void;
+}
+
 interface FoundryCanvas {
     ready: boolean;
     app: PixiAppLike;
@@ -120,6 +131,8 @@ interface FoundryCanvas {
     scene: FoundryScene | null;
     tokens: FoundryTokenLayer;
     animatePan(opts: { x?: number; y?: number; scale?: number; duration?: number }): Promise<unknown>;
+    /** Set when a layer's MouseInteractionManager is mid-interaction. Null otherwise. */
+    currentMouseManager: FoundryMouseInteractionManager | null;
 }
 
 declare const PIXI: {

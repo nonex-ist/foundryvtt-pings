@@ -37,14 +37,6 @@ let teardownTrigger: (() => void) | null = null;
 let socketHandle: SocketHandle | null = null;
 let apiBundle: ApiBundle | null = null;
 let audio: ReturnType<typeof createAudioController> | null = null;
-/**
- * Token id whose movement is held by the current gesture, if any.
- * Cleared (with an 80ms grace window) on pointerup so Foundry's
- * synchronous drag-commit handler fires while the lock is still in
- * place — preventing press-on-token from running away as a token drag.
- */
-let gestureLockedTokenId: string | null = null;
-const GESTURE_UNLOCK_GRACE_MS = 80;
 
 function resolveUserColor(): number {
     const c = game.user?.color;
@@ -188,28 +180,6 @@ function reinstallTrigger(): void {
         holdCancelTolerancePx: getHoldCancelTolerancePx(),
         menuSummonPx: getMenuSummonPx(),
         callbacks: {
-            onPressMatched: (worldPos) => {
-                const tokenId = findTokenIdAt(worldPos);
-                if (!tokenId || !apiBundle) return;
-                apiBundle.lockTokenMovement(tokenId);
-                gestureLockedTokenId = tokenId;
-            },
-            onReleaseMatched: () => {
-                const id = gestureLockedTokenId;
-                gestureLockedTokenId = null;
-                if (!id) return;
-                // Defer the unlock past the current event tick so Foundry's
-                // drag-commit `preUpdateToken` (which fires synchronously
-                // during pointerup) runs while the token is still locked.
-                // If the gesture committed `token-attach`, the attach lock
-                // is already in place by the time the grace window expires;
-                // for other commits, the gesture lock is the only thing
-                // keeping Foundry from yanking the token.
-                setTimeout(
-                    () => apiBundle?.unlockTokenMovement(id),
-                    GESTURE_UNLOCK_GRACE_MS,
-                );
-            },
             showPreview: showPreviewBundle,
             commit: commitPing,
         },

@@ -710,9 +710,7 @@ function createApi(config) {
       const handle = registry.get(payload.id);
       registry.delete(payload.id);
       handle?.destroy();
-    },
-    lockTokenMovement: trackAttach,
-    unlockTokenMovement: untrackAttach
+    }
   };
 }
 
@@ -912,6 +910,11 @@ function installTrigger(config) {
     const pointerId = ev.pointerId;
     const timerId = setTimeout(() => {
       if (!hold || hold.pointerId !== pointerId || hold.phase !== "holding") return;
+      try {
+        canvas.currentMouseManager?.cancel();
+      } catch (err) {
+        console.warn("pings | could not cancel native interaction", err);
+      }
       hold.phase = "preview";
       hold.timerId = null;
       const bundle = config.callbacks.showPreview(startWorld, {
@@ -1117,8 +1120,6 @@ var teardownTrigger = null;
 var socketHandle = null;
 var apiBundle = null;
 var audio = null;
-var gestureLockedTokenId = null;
-var GESTURE_UNLOCK_GRACE_MS = 80;
 function resolveUserColor() {
   const c = game.user?.color;
   if (typeof c === "number") return c;
@@ -1216,21 +1217,6 @@ function reinstallTrigger() {
     holdCancelTolerancePx: getHoldCancelTolerancePx(),
     menuSummonPx: getMenuSummonPx(),
     callbacks: {
-      onPressMatched: (worldPos) => {
-        const tokenId = findTokenIdAt(worldPos);
-        if (!tokenId || !apiBundle) return;
-        apiBundle.lockTokenMovement(tokenId);
-        gestureLockedTokenId = tokenId;
-      },
-      onReleaseMatched: () => {
-        const id = gestureLockedTokenId;
-        gestureLockedTokenId = null;
-        if (!id) return;
-        setTimeout(
-          () => apiBundle?.unlockTokenMovement(id),
-          GESTURE_UNLOCK_GRACE_MS
-        );
-      },
       showPreview: showPreviewBundle,
       commit: commitPing
     }

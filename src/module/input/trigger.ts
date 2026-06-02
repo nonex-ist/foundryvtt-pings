@@ -136,6 +136,20 @@ export function installTrigger(config: TriggerConfig): () => void {
 
         const timerId = setTimeout(() => {
             if (!hold || hold.pointerId !== pointerId || hold.phase !== 'holding') return;
+
+            // At the moment the gesture commits to being a ping, abort
+            // any in-flight Foundry interaction on the same pointer (most
+            // commonly a token drag started by the press). Foundry's
+            // `cancel()` resets the manager to HOVER and snaps any
+            // mid-drag target back to its origin, so our preview + menu
+            // mount over a stable scene — no visual drag ghost, no
+            // snap-back at release. Safe no-op if nothing's in flight.
+            try {
+                canvas.currentMouseManager?.cancel();
+            } catch (err) {
+                console.warn('pings | could not cancel native interaction', err);
+            }
+
             hold.phase = 'preview';
             hold.timerId = null;
             const bundle = config.callbacks.showPreview(startWorld, {
