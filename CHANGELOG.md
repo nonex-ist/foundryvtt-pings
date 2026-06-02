@@ -50,6 +50,6 @@ under v14 ApplicationV2.
 
 ### Notes
 
-- Built clean-room. Inspired by Azzurite's `pings` module (older Foundry
-  versions); no upstream code is reused.
-- Compatible with Foundry v14 only.
+- Built for Foundry v14 specifically (not a backport / not for older
+  versions). Inspired by Azzurite's pre-v14 `pings` module but
+  clean-room — no upstream code is reused.
