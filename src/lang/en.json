@@ -1,6 +1,6 @@
 {
-  "PINGS.ModuleTitle": "Pings",
-  "pings": {
+  "NONEX_IST_PINGS.ModuleTitle": "Pings",
+  "nonex-ist-pings": {
     "settings": {
       "rateLimitCapacity": {
         "name": "Rate limit — max pings per window",

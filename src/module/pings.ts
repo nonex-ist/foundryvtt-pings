@@ -101,7 +101,7 @@ function showPreviewBundle(
 ): { previewDispose: () => void; menu: ReturnType<typeof openRadialMenu> } {
     // Bypass the API on purpose: the preview is a visual-only indicator
     // ("you're about to ping"), not a committed ping, so it must NOT fire
-    // the `pings.display` hook (which would trigger audio + any other
+    // the `nonex-ist-pings.display` hook (which would trigger audio + any other
     // listeners) and must NOT be registered for removal. Direct createPing
     // gives us the visual without the ceremony. Audio + hooks fire on the
     // commit path instead.
@@ -145,13 +145,13 @@ async function promptForTextPing(position: WorldPosition): Promise<void> {
         // Fallback for environments without DialogV2 — shouldn't happen on
         // v14, but the graceful degradation keeps text-pings working if
         // Foundry ever moves the dialog API again.
-        const text = window.prompt(tr('pings.dialog.textPrompt', 'Ping text:'));
+        const text = window.prompt(tr('nonex-ist-pings.dialog.textPrompt', 'Ping text:'));
         if (text) apiBundle?.api.ping('text', position, { text });
         return;
     }
-    const title = tr('pings.dialog.textTitle', 'Pings — text');
-    const label = tr('pings.dialog.textLabel', 'Text');
-    const confirm = tr('pings.dialog.textConfirm', 'Ping');
+    const title = tr('nonex-ist-pings.dialog.textTitle', 'Pings — text');
+    const label = tr('nonex-ist-pings.dialog.textLabel', 'Text');
+    const confirm = tr('nonex-ist-pings.dialog.textConfirm', 'Ping');
     const result = (await dialog.input({
         window: { title },
         content:
@@ -209,7 +209,7 @@ function commitPing(
         const tokenId = findTokenIdAt(position);
         if (!tokenId) {
             ui?.notifications?.warn(
-                tr('pings.notifications.noTokenUnderCursor', 'Pings: no token under the cursor.'),
+                tr('nonex-ist-pings.notifications.noTokenUnderCursor', 'Pings: no token under the cursor.'),
             );
             return;
         }
@@ -273,7 +273,7 @@ Hooks.once('ready', () => {
     audio.setEnabled(getAudioEnabled());
     audio.setVolume(getAudioVolume());
 
-    Hooks.on('pings.display', (_handle: unknown, payload: unknown) => {
+    Hooks.on('nonex-ist-pings.display', (_handle: unknown, payload: unknown) => {
         const kind = (payload as DisplayPingPayload | undefined)?.kind;
         if (kind) audio?.play(kind);
     });
@@ -312,6 +312,6 @@ Hooks.once('ready', () => {
     globals.NonexIst = globals.NonexIst ?? {};
     globals.NonexIst.Pings = api;
 
-    Hooks.callAll('pingsReady', api);
+    Hooks.callAll('nonex-ist-pings.ready', api);
     console.log(`${MODULE_ID} | ready`);
 });

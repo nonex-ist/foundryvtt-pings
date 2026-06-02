@@ -198,7 +198,7 @@ tasks:
         --env FOUNDRY_TELEMETRY=false
         --publish {{.FOUNDRY_PORT}}:30000/tcp
         --volume "{{.FOUNDRY_DATA}}:/data"
-        --volume "{{.ROOT_DIR}}/src:/data/Data/modules/pings"
+        --volume "{{.ROOT_DIR}}/src:/data/Data/modules/nonex-ist-pings"
         ghcr.io/felddy/foundryvtt:{{.FOUNDRY_VERSION}}
       - echo ""
       - echo "Foundry VTT starting at http://localhost:{{.FOUNDRY_PORT}}"

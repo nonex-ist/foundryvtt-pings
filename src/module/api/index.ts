@@ -117,7 +117,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
         if (!attachedTokens.has(tokenDoc.id)) return undefined;
         ui.notifications?.warn(
             i18n(
-                'pings.notifications.tokenMovementBlocked',
+                'nonex-ist-pings.notifications.tokenMovementBlocked',
                 'Pings: {name} is marked — movement blocked until the marker fades.',
                 { name: tokenDoc.name ?? 'token' },
             ),
@@ -174,7 +174,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
         }
 
         registry.set(payload.id, handle);
-        Hooks.callAll('pings.display', handle, payload);
+        Hooks.callAll('nonex-ist-pings.display', handle, payload);
         return handle;
     }
 
@@ -253,7 +253,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
         if (kind === 'alert' && config.userRoleProvider() < getMinAlertRole()) {
             warnUser(
                 i18n(
-                    'pings.notifications.alertRoleRequired',
+                    'nonex-ist-pings.notifications.alertRoleRequired',
                     'Alert pings require Assistant role or higher.',
                 ),
             );
@@ -267,7 +267,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
         if (!checkSenderRole(kind)) return null;
         const payload = buildPayload(kind, position, opts);
         if (!payload) return null;
-        if (!Hooks.call('pings.preDisplay', payload)) return null;
+        if (!Hooks.call('nonex-ist-pings.preDisplay', payload)) return null;
         if (!config.socketProvider()?.broadcast({ type: 'displayPing', payload })) return null;
         displayLocally(payload);
         return payload.id;
@@ -278,7 +278,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
         if (!checkSenderRole(kind)) return null;
         const payload = buildPayload(kind, position, opts);
         if (!payload) return null;
-        if (!Hooks.call('pings.preDisplay', payload)) return null;
+        if (!Hooks.call('nonex-ist-pings.preDisplay', payload)) return null;
         displayLocally(payload);
         return payload.id;
     }
@@ -288,7 +288,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
         if (!checkSenderRole(kind)) return null;
         const payload = buildPayload(kind, position, opts);
         if (!payload) return null;
-        if (!Hooks.call('pings.preDisplay', payload)) return null;
+        if (!Hooks.call('nonex-ist-pings.preDisplay', payload)) return null;
         if (!config.socketProvider()?.broadcast({ type: 'displayPing', payload })) return null;
         return payload.id;
     }
@@ -330,7 +330,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
 
         handleInboundDisplay(payload) {
             if (isCurrentSceneDisabled()) return;
-            if (!Hooks.call('pings.preDisplay', payload)) return;
+            if (!Hooks.call('nonex-ist-pings.preDisplay', payload)) return;
             displayLocally(payload);
         },
 

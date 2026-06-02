@@ -1,6 +1,8 @@
+import { MODULE_ID } from '../constants.js';
 import type { PingKind, WorldPosition } from '../types.js';
 
-export const SOCKET_NAME = 'module.pings';
+/** Foundry socket channel; tracks the module id so a future rename doesn't accidentally break compatibility within a major. */
+export const SOCKET_NAME = `module.${MODULE_ID}`;
 
 export interface DisplayPingPayload {
     id: string;

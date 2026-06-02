@@ -1,6 +1,6 @@
 {
   "name": "foundryvtt-pings",
-  "version": "0.2.1",
+  "version": "1.0.0",
   "type": "module",
   "description": "Click-and-hold map pings for Foundry VTT v14.",
   "scripts": {

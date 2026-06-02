@@ -1,5 +1,5 @@
 // src/module/constants.ts
-var MODULE_ID = "pings";
+var MODULE_ID = "nonex-ist-pings";
 var HOLD_DURATION_MS = 350;
 var HOLD_CANCEL_TOLERANCE_PX = 5;
 var MENU_SUMMON_PX = 25;
@@ -549,7 +549,7 @@ function createApi(config) {
     if (!attachedTokens.has(tokenDoc.id)) return void 0;
     ui.notifications?.warn(
       i18n(
-        "pings.notifications.tokenMovementBlocked",
+        "nonex-ist-pings.notifications.tokenMovementBlocked",
         "Pings: {name} is marked \u2014 movement blocked until the marker fades.",
         { name: tokenDoc.name ?? "token" }
       )
@@ -593,7 +593,7 @@ function createApi(config) {
       }
     }
     registry.set(payload.id, handle);
-    Hooks.callAll("pings.display", handle, payload);
+    Hooks.callAll("nonex-ist-pings.display", handle, payload);
     return handle;
   }
   function buildPayload(kind, position, opts) {
@@ -652,7 +652,7 @@ function createApi(config) {
     if (kind === "alert" && config.userRoleProvider() < getMinAlertRole()) {
       warnUser(
         i18n(
-          "pings.notifications.alertRoleRequired",
+          "nonex-ist-pings.notifications.alertRoleRequired",
           "Alert pings require Assistant role or higher."
         )
       );
@@ -665,7 +665,7 @@ function createApi(config) {
     if (!checkSenderRole(kind)) return null;
     const payload = buildPayload(kind, position, opts);
     if (!payload) return null;
-    if (!Hooks.call("pings.preDisplay", payload)) return null;
+    if (!Hooks.call("nonex-ist-pings.preDisplay", payload)) return null;
     if (!config.socketProvider()?.broadcast({ type: "displayPing", payload })) return null;
     displayLocally(payload);
     return payload.id;
@@ -675,7 +675,7 @@ function createApi(config) {
     if (!checkSenderRole(kind)) return null;
     const payload = buildPayload(kind, position, opts);
     if (!payload) return null;
-    if (!Hooks.call("pings.preDisplay", payload)) return null;
+    if (!Hooks.call("nonex-ist-pings.preDisplay", payload)) return null;
     displayLocally(payload);
     return payload.id;
   }
@@ -684,7 +684,7 @@ function createApi(config) {
     if (!checkSenderRole(kind)) return null;
     const payload = buildPayload(kind, position, opts);
     if (!payload) return null;
-    if (!Hooks.call("pings.preDisplay", payload)) return null;
+    if (!Hooks.call("nonex-ist-pings.preDisplay", payload)) return null;
     if (!config.socketProvider()?.broadcast({ type: "displayPing", payload })) return null;
     return payload.id;
   }
@@ -721,7 +721,7 @@ function createApi(config) {
     },
     handleInboundDisplay(payload) {
       if (isCurrentSceneDisabled()) return;
-      if (!Hooks.call("pings.preDisplay", payload)) return;
+      if (!Hooks.call("nonex-ist-pings.preDisplay", payload)) return;
       displayLocally(payload);
     },
     handleInboundRemove(payload) {
@@ -814,10 +814,10 @@ function eventMatches(event, spec) {
 
 // src/module/input/radial-menu.ts
 var RADIAL_SEGMENTS = [
-  { kind: "rally", angleCenter: -Math.PI / 2, i18n: "pings.radial.rally", fallback: "Rally" },
-  { kind: "alert", angleCenter: 0, i18n: "pings.radial.alert", fallback: "Alert" },
-  { kind: "text", angleCenter: Math.PI / 2, i18n: "pings.radial.text", fallback: "Text" },
-  { kind: "token-attach", angleCenter: Math.PI, i18n: "pings.radial.token", fallback: "Token" }
+  { kind: "rally", angleCenter: -Math.PI / 2, i18n: "nonex-ist-pings.radial.rally", fallback: "Rally" },
+  { kind: "alert", angleCenter: 0, i18n: "nonex-ist-pings.radial.alert", fallback: "Alert" },
+  { kind: "text", angleCenter: Math.PI / 2, i18n: "nonex-ist-pings.radial.text", fallback: "Text" },
+  { kind: "token-attach", angleCenter: Math.PI, i18n: "nonex-ist-pings.radial.token", fallback: "Token" }
 ];
 function tr(key, fallback) {
   const out = game.i18n?.localize(key);
@@ -888,18 +888,18 @@ function arcPath(innerR, outerR, startAngle, endAngle) {
 }
 function openRadialMenu(opts) {
   const root = document.createElement("div");
-  root.className = "pings-radial-menu pings-radial-menu--passive";
+  root.className = "nonex-ist-pings-radial-menu nonex-ist-pings-radial-menu--passive";
   root.style.left = `${opts.clientX}px`;
   root.style.top = `${opts.clientY}px`;
   const userBase = opts.userColor;
   const userLight = lighten(opts.userColor, 0.4);
   const userDark = darken(opts.userColor, 0.55);
-  root.style.setProperty("--pings-user-base", colorToHex(userBase));
-  root.style.setProperty("--pings-user-light", colorToHex(userLight));
-  root.style.setProperty("--pings-user-dark", colorToHex(userDark));
+  root.style.setProperty("--nonex-ist-pings-user-base", colorToHex(userBase));
+  root.style.setProperty("--nonex-ist-pings-user-light", colorToHex(userLight));
+  root.style.setProperty("--nonex-ist-pings-user-dark", colorToHex(userDark));
   const disabledKinds = new Set(opts.disabledKinds ?? []);
   const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("class", "pings-radial-svg");
+  svg.setAttribute("class", "nonex-ist-pings-radial-svg");
   svg.setAttribute("width", `${SVG_SIZE_PX}`);
   svg.setAttribute("height", `${SVG_SIZE_PX}`);
   svg.setAttribute(
@@ -908,16 +908,16 @@ function openRadialMenu(opts) {
   );
   root.appendChild(svg);
   const defs = document.createElementNS(SVG_NS, "defs");
-  defs.appendChild(buildRadialGradient("pings-grad-rally", 16762432));
-  defs.appendChild(buildRadialGradient("pings-grad-alert", 16724787));
-  defs.appendChild(buildRadialGradient("pings-grad-text", userLight));
-  defs.appendChild(buildRadialGradient("pings-grad-token", userDark));
+  defs.appendChild(buildRadialGradient("nonex-ist-pings-grad-rally", 16762432));
+  defs.appendChild(buildRadialGradient("nonex-ist-pings-grad-alert", 16724787));
+  defs.appendChild(buildRadialGradient("nonex-ist-pings-grad-text", userLight));
+  defs.appendChild(buildRadialGradient("nonex-ist-pings-grad-token", userDark));
   svg.appendChild(defs);
   const segments = /* @__PURE__ */ new Map();
   for (const seg of RADIAL_SEGMENTS) {
     const path = document.createElementNS(SVG_NS, "path");
-    let className = "pings-radial-segment";
-    if (disabledKinds.has(seg.kind)) className += " pings-radial-disabled";
+    let className = "nonex-ist-pings-radial-segment";
+    if (disabledKinds.has(seg.kind)) className += " nonex-ist-pings-radial-disabled";
     path.setAttribute("class", className);
     path.dataset.kind = seg.kind;
     const half = Math.PI / 4;
@@ -934,7 +934,7 @@ function openRadialMenu(opts) {
     segments.set(seg.kind, path);
   }
   const center = document.createElementNS(SVG_NS, "circle");
-  center.setAttribute("class", "pings-radial-segment pings-radial-center");
+  center.setAttribute("class", "nonex-ist-pings-radial-segment nonex-ist-pings-radial-center");
   center.dataset.kind = "here";
   center.setAttribute("cx", "0");
   center.setAttribute("cy", "0");
@@ -942,21 +942,21 @@ function openRadialMenu(opts) {
   svg.appendChild(center);
   segments.set("here", center);
   const centerRing = document.createElementNS(SVG_NS, "circle");
-  centerRing.setAttribute("class", "pings-radial-center-ring");
+  centerRing.setAttribute("class", "nonex-ist-pings-radial-center-ring");
   centerRing.setAttribute("cx", "0");
   centerRing.setAttribute("cy", "0");
   centerRing.setAttribute("r", `${CENTER_RADIUS_PX + 3.5}`);
   svg.appendChild(centerRing);
   const outerRing = document.createElementNS(SVG_NS, "circle");
-  outerRing.setAttribute("class", "pings-radial-outer-ring");
+  outerRing.setAttribute("class", "nonex-ist-pings-radial-outer-ring");
   outerRing.setAttribute("cx", "0");
   outerRing.setAttribute("cy", "0");
   outerRing.setAttribute("r", `${OUTER_RADIUS_PX + 0.5}`);
   svg.appendChild(outerRing);
   for (const seg of RADIAL_SEGMENTS) {
     const label = document.createElementNS(SVG_NS, "text");
-    let labelClass = "pings-radial-label";
-    if (disabledKinds.has(seg.kind)) labelClass += " pings-radial-disabled";
+    let labelClass = "nonex-ist-pings-radial-label";
+    if (disabledKinds.has(seg.kind)) labelClass += " nonex-ist-pings-radial-disabled";
     label.setAttribute("class", labelClass);
     label.setAttribute("x", `${LABEL_RADIUS_PX * Math.cos(seg.angleCenter)}`);
     label.setAttribute("y", `${LABEL_RADIUS_PX * Math.sin(seg.angleCenter)}`);
@@ -966,12 +966,12 @@ function openRadialMenu(opts) {
     svg.appendChild(label);
   }
   const centerLabel = document.createElementNS(SVG_NS, "text");
-  centerLabel.setAttribute("class", "pings-radial-label pings-radial-center-label");
+  centerLabel.setAttribute("class", "nonex-ist-pings-radial-label nonex-ist-pings-radial-center-label");
   centerLabel.setAttribute("x", "0");
   centerLabel.setAttribute("y", "0");
   centerLabel.setAttribute("text-anchor", "middle");
   centerLabel.setAttribute("dominant-baseline", "middle");
-  centerLabel.textContent = tr("pings.radial.ping", "Ping");
+  centerLabel.textContent = tr("nonex-ist-pings.radial.ping", "Ping");
   svg.appendChild(centerLabel);
   document.body.appendChild(root);
   let active = false;
@@ -979,7 +979,7 @@ function openRadialMenu(opts) {
   const clearHighlight = () => {
     if (currentHighlight !== null) {
       const el = segments.get(currentHighlight);
-      if (el) el.classList.remove("pings-radial-active");
+      if (el) el.classList.remove("nonex-ist-pings-radial-active");
       currentHighlight = null;
     }
   };
@@ -989,7 +989,7 @@ function openRadialMenu(opts) {
     if (currentHighlight === effective) return;
     clearHighlight();
     const el = segments.get(effective);
-    if (el) el.classList.add("pings-radial-active");
+    if (el) el.classList.add("nonex-ist-pings-radial-active");
     currentHighlight = effective;
   };
   return {
@@ -997,9 +997,9 @@ function openRadialMenu(opts) {
       if (active === value) return;
       active = value;
       if (active) {
-        root.classList.remove("pings-radial-menu--passive");
+        root.classList.remove("nonex-ist-pings-radial-menu--passive");
       } else {
-        root.classList.add("pings-radial-menu--passive");
+        root.classList.add("nonex-ist-pings-radial-menu--passive");
         clearHighlight();
       }
     },
@@ -1179,7 +1179,7 @@ function createRateLimit(config) {
 }
 
 // src/module/network/messages.ts
-var SOCKET_NAME = "module.pings";
+var SOCKET_NAME = `module.${MODULE_ID}`;
 var KINDS = /* @__PURE__ */ new Set([
   "here",
   "rally",
@@ -1329,13 +1329,13 @@ function showPreviewBundle(worldPosition, clientPosition) {
 async function promptForTextPing(position) {
   const dialog = foundry.applications?.api?.DialogV2;
   if (!dialog) {
-    const text2 = window.prompt(tr2("pings.dialog.textPrompt", "Ping text:"));
+    const text2 = window.prompt(tr2("nonex-ist-pings.dialog.textPrompt", "Ping text:"));
     if (text2) apiBundle?.api.ping("text", position, { text: text2 });
     return;
   }
-  const title = tr2("pings.dialog.textTitle", "Pings \u2014 text");
-  const label = tr2("pings.dialog.textLabel", "Text");
-  const confirm = tr2("pings.dialog.textConfirm", "Ping");
+  const title = tr2("nonex-ist-pings.dialog.textTitle", "Pings \u2014 text");
+  const label = tr2("nonex-ist-pings.dialog.textLabel", "Text");
+  const confirm = tr2("nonex-ist-pings.dialog.textConfirm", "Ping");
   const result = await dialog.input({
     window: { title },
     content: `<div class="form-group"><label>${escapeHtml(label)}</label><input type="text" name="text" autofocus required maxlength="200" /></div>`,
@@ -1365,7 +1365,7 @@ function commitPing(kind, position, previewDispose) {
     const tokenId = findTokenIdAt(position);
     if (!tokenId) {
       ui?.notifications?.warn(
-        tr2("pings.notifications.noTokenUnderCursor", "Pings: no token under the cursor.")
+        tr2("nonex-ist-pings.notifications.noTokenUnderCursor", "Pings: no token under the cursor.")
       );
       return;
     }
@@ -1418,7 +1418,7 @@ Hooks.once("ready", () => {
   audio = createAudioController();
   audio.setEnabled(getAudioEnabled());
   audio.setVolume(getAudioVolume());
-  Hooks.on("pings.display", (_handle, payload) => {
+  Hooks.on("nonex-ist-pings.display", (_handle, payload) => {
     const kind = payload?.kind;
     if (kind) audio?.play(kind);
   });
@@ -1451,7 +1451,7 @@ Hooks.once("ready", () => {
   const globals = window;
   globals.NonexIst = globals.NonexIst ?? {};
   globals.NonexIst.Pings = api;
-  Hooks.callAll("pingsReady", api);
+  Hooks.callAll("nonex-ist-pings.ready", api);
   console.log(`${MODULE_ID} | ready`);
 });
 //# sourceMappingURL=pings.js.map
