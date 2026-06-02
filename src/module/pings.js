@@ -1051,10 +1051,14 @@ function findTokenIdAt(position) {
   return null;
 }
 function showPreviewPing(position) {
-  const id = apiBundle?.api.showHere(position) ?? null;
-  return () => {
-    if (id !== null) apiBundle?.api.remove(id, { broadcast: false });
-  };
+  const handle = createPing({
+    kind: "here",
+    position,
+    color: resolveUserColor(),
+    size: canvas.dimensions.size,
+    durationMs: KIND_DEFAULT_DURATION_MS.here
+  });
+  return () => handle.destroy();
 }
 function commitPing(kind, position, previewDispose) {
   if (!apiBundle) {
@@ -1062,6 +1066,7 @@ function commitPing(kind, position, previewDispose) {
     return;
   }
   if (kind === "here" && previewDispose) {
+    audio?.play("here");
     apiBundle.api.sendHere(position);
     return;
   }

@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gesture instead of a preview-then-flash sequence. Non-here kinds and
   menu-deadzone "here" still render fresh (preview was already disposed
   or is being replaced by a different visual).
+- Preview is now silent. It used to fire the `pings.display` hook on
+  appearance (audio played at the 350ms preview-show mark), which
+  contradicted the "preview = preparing, release = ping" mental model.
+  The preview now bypasses the API entirely (visual-only `createPing`,
+  no hooks, no registry). Audio + display hook fire on commit. Net
+  effect: hold = silent visual feedback; release = sound + broadcast.
 
 ## [0.2.0] — 2026-06-02
 

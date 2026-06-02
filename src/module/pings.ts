@@ -11,7 +11,7 @@
 
 import { createApi, type ApiBundle, type PingsApi } from './api/index.js';
 import { createAudioController } from './audio/play.js';
-import { DEFAULT_PING_COLOR, MODULE_ID } from './constants.js';
+import { DEFAULT_PING_COLOR, KIND_DEFAULT_DURATION_MS, MODULE_ID } from './constants.js';
 import { parseBinding } from './input/binding.js';
 import { openRadialMenu } from './input/radial-menu.js';
 import { installTrigger } from './input/trigger.js';
@@ -19,6 +19,7 @@ import { suppressNativeLongPress } from './native-ping.js';
 import type { DisplayPingPayload } from './network/messages.js';
 import { createRateLimit } from './network/rate-limit.js';
 import { installSocket, type SocketHandle } from './network/socket.js';
+import { createPing } from './render/ping.js';
 import {
     getAudioEnabled,
     getAudioVolume,
@@ -61,10 +62,20 @@ function findTokenIdAt(position: WorldPosition): string | null {
 }
 
 function showPreviewPing(position: WorldPosition): () => void {
-    const id = apiBundle?.api.showHere(position) ?? null;
-    return () => {
-        if (id !== null) apiBundle?.api.remove(id, { broadcast: false });
-    };
+    // Bypass the API on purpose: the preview is a visual-only indicator
+    // ("you're about to ping"), not a committed ping, so it must NOT fire
+    // the `pings.display` hook (which would trigger audio + any other
+    // listeners) and must NOT be registered for removal. Direct createPing
+    // gives us the visual without the ceremony. Audio + hooks fire on the
+    // commit path instead.
+    const handle = createPing({
+        kind: 'here',
+        position,
+        color: resolveUserColor(),
+        size: canvas.dimensions.size,
+        durationMs: KIND_DEFAULT_DURATION_MS.here,
+    });
+    return () => handle.destroy();
 }
 
 function commitPing(
@@ -79,10 +90,12 @@ function commitPing(
 
     // "Here" commit from preview state: preview is already on screen with
     // exactly the same visual the commit would render. Keep it (skip the
-    // disposer) and broadcast-only so peers see their copy. No flicker, no
-    // double-render. Peers' pings start their TTL from broadcast time;
-    // local user's preview lives out its 350ms-shifted TTL — imperceptible.
+    // disposer) and broadcast-only so peers see their copy. The preview
+    // itself was silent — fire audio here so the user gets a confirmation
+    // cue ON RELEASE, matching the "preview = preparing, release = ping"
+    // mental model.
     if (kind === 'here' && previewDispose) {
+        audio?.play('here');
         apiBundle.api.sendHere(position);
         return;
     }
