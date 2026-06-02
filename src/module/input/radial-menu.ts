@@ -96,7 +96,7 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
 
     const center = document.createElement('div');
     center.className = 'pings-radial-segment pings-radial-center';
-    center.textContent = 'Here';
+    center.textContent = 'Ping';
     root.appendChild(center);
 
     const segments = new Map<PingKind, HTMLDivElement>([['here', center]]);

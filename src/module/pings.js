@@ -251,31 +251,37 @@ function createHereVisual({ color, size }) {
   update(0);
   return { container, update };
 }
-var RALLY_RING_COUNT = 3;
-var RALLY_CYCLE_MS = 1500;
-var RALLY_LINE_WIDTH = 3;
-var RALLY_BASE_ALPHA = 0.85;
-var RALLY_INNER_RATIO = 0.1;
+var RALLY_ARROW_COUNT = 4;
+var RALLY_CYCLE_MS = 1100;
+var RALLY_LINE_WIDTH = 4;
+var RALLY_BASE_ALPHA = 0.95;
 var RALLY_OUTER_RATIO = 0.85;
+var RALLY_INNER_RATIO = 0.1;
+var RALLY_ARROW_HALF_SPAN = 0.18;
 function createRallyVisual({ color, size }) {
   const container = new PIXI.Container();
   const outerR = size * RALLY_OUTER_RATIO;
   const innerR = size * RALLY_INNER_RATIO;
-  const rings = [];
-  for (let i = 0; i < RALLY_RING_COUNT; i++) {
-    const ring = new PIXI.Graphics();
-    container.addChild(ring);
-    rings.push(ring);
+  const armLen = size * RALLY_ARROW_HALF_SPAN;
+  const arrows = [];
+  for (let i = 0; i < RALLY_ARROW_COUNT; i++) {
+    const g = new PIXI.Graphics();
+    g.rotation = i / RALLY_ARROW_COUNT * Math.PI * 2;
+    container.addChild(g);
+    arrows.push(g);
   }
   function update(elapsedMs) {
-    for (let i = 0; i < RALLY_RING_COUNT; i++) {
-      const phase = (elapsedMs / RALLY_CYCLE_MS + i / RALLY_RING_COUNT) % 1;
-      const radius = innerR + (outerR - innerR) * phase;
-      const alpha = RALLY_BASE_ALPHA * (1 - phase * 0.7);
-      const ring = rings[i];
-      ring.clear();
-      ring.lineStyle(RALLY_LINE_WIDTH, color, alpha);
-      ring.drawCircle(0, 0, radius);
+    for (let i = 0; i < RALLY_ARROW_COUNT; i++) {
+      const phase = (elapsedMs / RALLY_CYCLE_MS + i / RALLY_ARROW_COUNT) % 1;
+      const radius = outerR - (outerR - innerR) * phase;
+      const fade = phase < 0.15 ? phase / 0.15 : 1 - (phase - 0.15) / 0.85;
+      const alpha = RALLY_BASE_ALPHA * fade;
+      const g = arrows[i];
+      g.clear();
+      g.lineStyle(RALLY_LINE_WIDTH, color, alpha);
+      g.moveTo(radius, -armLen);
+      g.lineTo(radius - armLen, 0);
+      g.lineTo(radius, armLen);
     }
   }
   update(0);
@@ -761,7 +767,7 @@ function openRadialMenu(opts) {
   root.style.top = `${opts.clientY}px`;
   const center = document.createElement("div");
   center.className = "pings-radial-segment pings-radial-center";
-  center.textContent = "Here";
+  center.textContent = "Ping";
   root.appendChild(center);
   const segments = /* @__PURE__ */ new Map([["here", center]]);
   for (const seg of RADIAL_SEGMENTS) {
