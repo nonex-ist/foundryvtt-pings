@@ -2,7 +2,7 @@
   "id": "pings",
   "title": "Pings",
   "description": "Click-and-hold map pings for Foundry VTT.",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "compatibility": {
     "minimum": "14",
     "verified": "14",
