@@ -7,6 +7,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  issues: write          # the sticky comment goes through the issues API
 
 concurrency:
   group: pr-preview-${{ github.event.pull_request.number }}
@@ -17,6 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Check out the PR's HEAD commit, not the synthetic merge commit,
+          # so the artifact corresponds to what the sticky comment reports
+          # under `head.sha`.
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - uses: pnpm/action-setup@903f9c1a6ebcba6cf41d87230be49611ac97822e # v6
 
@@ -57,6 +63,11 @@ jobs:
           if-no-files-found: error
 
       - name: Post / update preview comment
+        # PRs from forks get a read-only GITHUB_TOKEN, so commenting fails.
+        # Skip the step for fork PRs so the build still succeeds for
+        # outside contributors — they'll see the artifact upload in the
+        # checks list, just no sticky install instructions.
+        if: github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

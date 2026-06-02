@@ -68,8 +68,11 @@ jobs:
           (cd build/artifacts && sha256sum pings.zip > pings.zip.sha256)
 
       - name: Generate CycloneDX SBOM
+        # Use `pnpm dlx` so we don't carry cdxgen as a devDep just for this
+        # once-per-release step. Pinned to the major track OD6S has verified
+        # against; bump deliberately when their devDep moves.
         run: >
-          pnpm exec cdxgen
+          pnpm dlx @cyclonedx/cdxgen@12
           --type pnpm
           --no-recurse
           --spec-version 1.6
@@ -88,7 +91,9 @@ jobs:
           # notes (GitHub Releases honor GFM `breaks: true`).
           # Reflow rules:
           #   - blank lines and headers (`#`) flush + pass through
-          #   - lines starting `- ` / `* ` start a new buffered list item
+          #   - any line whose first non-space char is `-` or `*` is a
+          #     list item (possibly indented for nested bullets); leading
+          #     whitespace preserved so markdown keeps the nesting
           #   - any other non-empty line appends to the current buffer,
           #     joined with a single space (leading indent stripped)
           # If the version isn't found (e.g. someone tagged without
@@ -103,7 +108,7 @@ jobs:
             !capture           { next }
             /^$/               { flush(); print ""; next }
             /^#+ /             { flush(); print; next }
-            /^[-*] /           { flush(); buf=$0; next }
+            /^[ \t]*[-*] /     { flush(); buf=$0; next }
                                { line=$0; sub(/^[ \t]+/, "", line);
                                  buf = (buf == "" ? line : buf " " line) }
             END                { flush() }
