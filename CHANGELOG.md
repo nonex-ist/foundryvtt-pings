@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0]
+## [0.1.0] — 2026-06-02
 
 First release. Click-and-hold map pings for Foundry VTT v14, fixing the
 sheet pointer-bleed bug that Azzurite's older `pings` module exhibits
