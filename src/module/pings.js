@@ -18,6 +18,9 @@ var MIN_RALLY_ROLE = 2;
 var MIN_ALERT_ROLE = 3;
 var RATE_LIMIT_CAPACITY = 3;
 var RATE_LIMIT_WINDOW_MS = 5e3;
+var AUDIO_ENABLED_DEFAULT = true;
+var AUDIO_VOLUME_DEFAULT = 0.5;
+var AUDIO_PATH_PREFIX = `modules/${MODULE_ID}/sounds`;
 
 // src/module/render/animation.ts
 function runAnimation(container, config) {
@@ -151,6 +154,7 @@ var TEXT_CORNER_RADIUS_PX = 6;
 var TEXT_FONT_SIZE = 18;
 var TEXT_BG_ALPHA = 0.65;
 var TEXT_MAX_WIDTH_PX = 320;
+var TEXT_OFFSET_Y = 14;
 function createTextVisual({ color, text }) {
   const container = new PIXI.Container();
   const label = new PIXI.Text(text ?? "", {
@@ -165,13 +169,17 @@ function createTextVisual({ color, text }) {
   });
   label.anchor.x = 0.5;
   label.anchor.y = 0.5;
+  const labelHeight = label.height;
+  const tagHalfHeight = labelHeight / 2 + TEXT_PADDING_PX;
+  const offsetY = -tagHalfHeight - TEXT_OFFSET_Y;
+  label.y = offsetY;
   const bg = new PIXI.Graphics();
   bg.beginFill(color, TEXT_BG_ALPHA);
   bg.drawRoundedRect(
     -label.width / 2 - TEXT_PADDING_PX,
-    -label.height / 2 - TEXT_PADDING_PX,
+    offsetY - labelHeight / 2 - TEXT_PADDING_PX,
     label.width + TEXT_PADDING_PX * 2,
-    label.height + TEXT_PADDING_PX * 2,
+    labelHeight + TEXT_PADDING_PX * 2,
     TEXT_CORNER_RADIUS_PX
   );
   bg.endFill();
@@ -363,7 +371,27 @@ function createApi(config) {
       color = config.senderColorProvider();
     }
     const durationMs = opts?.durationMs !== void 0 ? assertPositiveInt(opts.durationMs, "durationMs") : KIND_DEFAULT_DURATION_MS[kind];
-    const moveCanvas = opts?.moveCanvas !== void 0 ? opts.moveCanvas : kind === "rally";
+    let moveCanvas;
+    if (opts?.moveCanvas !== void 0) {
+      if (typeof opts.moveCanvas !== "boolean") {
+        throw new TypeError("pings: moveCanvas must be a boolean");
+      }
+      moveCanvas = opts.moveCanvas;
+    } else {
+      moveCanvas = kind === "rally";
+    }
+    if (opts?.text !== void 0 && typeof opts.text !== "string") {
+      throw new TypeError("pings: text must be a string");
+    }
+    if (opts?.tokenId !== void 0 && (typeof opts.tokenId !== "string" || opts.tokenId.length === 0)) {
+      throw new TypeError("pings: tokenId must be a non-empty string");
+    }
+    if (kind === "text" && (opts?.text === void 0 || opts.text.length === 0)) {
+      throw new TypeError("pings: kind 'text' requires a non-empty `text` option");
+    }
+    if (kind === "token-attach" && opts?.tokenId === void 0) {
+      throw new TypeError("pings: kind 'token-attach' requires a `tokenId` option");
+    }
     const sceneId = config.sceneIdProvider();
     const senderId = config.senderIdProvider();
     if (!sceneId || !senderId) return null;
@@ -377,18 +405,8 @@ function createApi(config) {
       durationMs,
       moveCanvas
     };
-    if (opts?.text !== void 0) {
-      if (typeof opts.text !== "string") {
-        throw new TypeError("pings: text must be a string");
-      }
-      payload.text = opts.text;
-    }
-    if (opts?.tokenId !== void 0) {
-      if (typeof opts.tokenId !== "string" || opts.tokenId.length === 0) {
-        throw new TypeError("pings: tokenId must be a non-empty string");
-      }
-      payload.tokenId = opts.tokenId;
-    }
+    if (opts?.text !== void 0) payload.text = opts.text;
+    if (opts?.tokenId !== void 0) payload.tokenId = opts.tokenId;
     return payload;
   }
   function checkSenderRole(kind) {
@@ -457,6 +475,34 @@ function createApi(config) {
       const handle = registry.get(payload.id);
       registry.delete(payload.id);
       handle?.destroy();
+    }
+  };
+}
+
+// src/module/audio/play.ts
+function createAudioController() {
+  let enabled = AUDIO_ENABLED_DEFAULT;
+  let volume = AUDIO_VOLUME_DEFAULT;
+  return {
+    play(kind) {
+      if (!enabled) return;
+      try {
+        const audio = new Audio(`${AUDIO_PATH_PREFIX}/${kind}.ogg`);
+        audio.volume = volume;
+        const result = audio.play();
+        if (result instanceof Promise) {
+          result.catch(() => {
+          });
+        }
+      } catch (err) {
+        console.warn(`${MODULE_ID} | audio playback failed for kind=${kind}`, err);
+      }
+    },
+    setEnabled(value) {
+      enabled = value;
+    },
+    setVolume(value) {
+      volume = Math.max(0, Math.min(1, value));
     }
   };
 }
@@ -855,6 +901,11 @@ Hooks.on("canvasTearDown", () => {
 });
 Hooks.once("ready", () => {
   const version = game.modules?.get(MODULE_ID)?.version ?? "0.0.0";
+  const audio = createAudioController();
+  Hooks.on("pings.display", (_handle, payload) => {
+    const kind = payload?.kind;
+    if (kind) audio.play(kind);
+  });
   apiBundle = createApi({
     version,
     sceneIdProvider: () => canvas.scene?.id ?? null,
