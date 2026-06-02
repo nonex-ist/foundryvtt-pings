@@ -2,31 +2,41 @@ import type { BindingSpec, PingKind, WorldPosition } from '../types.js';
 import { eventMatches } from './binding.js';
 import type { MenuController } from './radial-menu.js';
 
+export interface PreviewBundle {
+    /** Drops the preview ping. Trigger calls this on cancel and hands it to commit for the commit handler to call (or skip). */
+    previewDispose: () => void;
+    /** Radial menu, opened in passive mode at preview time. Trigger calls `setActive(true)` once the user drags past the menu-summon threshold; destroys it after commit/cancel. */
+    menu: MenuController;
+}
+
 export interface TriggerCallbacks {
     /**
      * The hold has matured (350ms passed without exceeding the 5px cancel
-     * tolerance). Render a local-only "here" preview at the position so
-     * the user gets immediate feedback. Returns a disposer the trigger
-     * calls when the preview should end (menu summoned, or canceled
-     * without commit).
+     * tolerance). Mount the preview ping AND the radial menu (the menu
+     * starts in passive mode — visible-but-dim, signaling availability).
+     * Returns both as a bundle the trigger drives.
      */
-    showPreview(position: WorldPosition): () => void;
+    showPreview(
+        worldPosition: WorldPosition,
+        clientPosition: { x: number; y: number },
+    ): PreviewBundle;
 
     /**
-     * The user dragged past the menu-summon threshold after the preview
-     * appeared. Build the menu overlay anchored at the *original* press
-     * position (both client and world coords are supplied). Returns a
-     * controller the trigger drives during subsequent pointer moves.
+     * Commit the gesture. Fired on release from preview or menu state;
+     * never fired if the gesture was canceled. The menu was already
+     * destroyed by the trigger before this fires.
+     *
+     * `previewDispose` is non-null when the preview ping is still on
+     * screen. The handler owns the preview from this point: call the
+     * disposer to drop it (replacing with a different kind's visual), or
+     * skip it to let the preview live out its natural lifetime — useful
+     * when the commit *is* the preview ("here" from preview state).
      */
-    openMenu(clientPosition: { x: number; y: number }, worldPosition: WorldPosition): MenuController;
-
-    /**
-     * Commit the gesture. Fired on release in either preview or menu
-     * state; never fired if the gesture was canceled. The preview
-     * disposer (if any) has already been called; the menu controller (if
-     * any) has already been destroyed.
-     */
-    commit(kind: PingKind, position: WorldPosition): void;
+    commit(
+        kind: PingKind,
+        position: WorldPosition,
+        previewDispose: (() => void) | null,
+    ): void;
 }
 
 export interface TriggerConfig {
@@ -70,19 +80,18 @@ function clientToWorld(
  * Install the input trigger listener.
  *
  * State machine:
- *   idle -- pointerdown matching binding -->  holding (350ms timer armed)
+ *   idle    -- pointerdown matches binding --> holding (350ms timer armed)
  *   holding -- drag >5px / release / cancel --> idle (no commit)
- *   holding -- 350ms timer fires --> preview (callbacks.showPreview)
- *   preview -- drag >25px --> menu (preview dispose, callbacks.openMenu)
- *   preview -- release --> commit('here'), idle
- *   menu -- pointermove --> menu.onCursorMove (highlight updates)
- *   menu -- release --> commit(menu.getSelectedKind), idle
- *   any -- pointercancel --> idle (no commit)
+ *   holding -- 350ms timer fires --> preview (showPreview mounts ring +
+ *                                              radial menu in passive mode)
+ *   preview -- drag ≥25px --> menu (menu.setActive(true), preview kept)
+ *   preview -- release --> commit('here', previewDispose), idle
+ *   menu    -- pointermove --> menu.onCursorMove (highlight updates)
+ *   menu    -- release --> commit(menu.getSelectedKind, previewDispose), idle
+ *   any     -- pointercancel --> idle (no commit, everything torn down)
  *
  * Binding to `canvas.app.view` (not window) is the M1 fix for the v14
- * sheet pointer-bleed bug. Sheets are stacked above the canvas DOM
- * element, so pointer events that originate inside a sheet never reach
- * this listener.
+ * sheet pointer-bleed bug.
  */
 export function installTrigger(config: TriggerConfig): () => void {
     const view = canvas.app.view;
@@ -109,9 +118,28 @@ export function installTrigger(config: TriggerConfig): () => void {
 
         const timerId = setTimeout(() => {
             if (!hold || hold.pointerId !== pointerId || hold.phase !== 'holding') return;
+
+            // At the moment the gesture commits to being a ping, abort
+            // any in-flight Foundry interaction on the same pointer (most
+            // commonly a token drag started by the press). Foundry's
+            // `cancel()` resets the manager to HOVER and snaps any
+            // mid-drag target back to its origin, so our preview + menu
+            // mount over a stable scene — no visual drag ghost, no
+            // snap-back at release. Safe no-op if nothing's in flight.
+            try {
+                canvas.currentMouseManager?.cancel();
+            } catch (err) {
+                console.warn('pings | could not cancel native interaction', err);
+            }
+
             hold.phase = 'preview';
             hold.timerId = null;
-            hold.previewDispose = config.callbacks.showPreview(startWorld);
+            const bundle = config.callbacks.showPreview(startWorld, {
+                x: startClientX,
+                y: startClientY,
+            });
+            hold.previewDispose = bundle.previewDispose;
+            hold.menu = bundle.menu;
         }, config.holdDurationMs);
 
         hold = {
@@ -142,19 +170,14 @@ export function installTrigger(config: TriggerConfig): () => void {
 
         if (hold.phase === 'preview') {
             if (distSq >= config.menuSummonPx * config.menuSummonPx) {
-                hold.previewDispose?.();
-                hold.previewDispose = null;
-                hold.menu = config.callbacks.openMenu(
-                    { x: hold.startClientX, y: hold.startClientY },
-                    hold.startWorld,
-                );
+                hold.menu?.setActive(true);
+                hold.menu?.onCursorMove(ev.clientX, ev.clientY);
                 hold.phase = 'menu';
-                hold.menu.onCursorMove(ev.clientX, ev.clientY);
             }
             return;
         }
 
-        // menu phase
+        // menu phase — keep highlight tracking
         hold.menu?.onCursorMove(ev.clientX, ev.clientY);
     };
 
@@ -169,8 +192,17 @@ export function installTrigger(config: TriggerConfig): () => void {
         }
 
         const commitPosition = hold.startWorld;
+        // Hand the preview disposer to the commit callback. The trigger
+        // destroys the menu unconditionally (it's a transient affordance);
+        // the preview's fate is the commit handler's call.
+        const previewDispose = hold.previewDispose;
+        hold.previewDispose = null;
         reset();
-        if (commitKind !== null) config.callbacks.commit(commitKind, commitPosition);
+        if (commitKind !== null) {
+            config.callbacks.commit(commitKind, commitPosition, previewDispose);
+        } else if (previewDispose) {
+            previewDispose();
+        }
     };
 
     const onPointerCancel = (ev: PointerEvent): void => {

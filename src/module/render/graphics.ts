@@ -55,40 +55,60 @@ function createHereVisual({ color, size }: VisualOptions): PingVisual {
 
 // ── rally ─────────────────────────────────────────────────────────
 
-const RALLY_RING_COUNT = 3;
-const RALLY_CYCLE_MS = 1500;
-const RALLY_LINE_WIDTH = 3;
-const RALLY_BASE_ALPHA = 0.85;
-const RALLY_INNER_RATIO = 0.1;
+const RALLY_ARROW_COUNT = 4;
+const RALLY_CYCLE_MS = 1100;
+const RALLY_LINE_WIDTH = 4;
+const RALLY_BASE_ALPHA = 0.95;
 const RALLY_OUTER_RATIO = 0.85;
+const RALLY_INNER_RATIO = 0.1;
+const RALLY_ARROW_HALF_SPAN = 0.18;
 
 /**
- * "Rally" ping: concentric rings expanding outward — visual inverse of
- * "here". Bolder line width, higher alpha, larger footprint to convey
- * active broadcast. Pairs with the receiver-side viewport pan to deliver
- * the "everyone gather here" signal.
+ * "Rally" ping: four chevrons converging on the spot from N/E/S/W,
+ * continuously sliding inward and fading as they reach the center. The
+ * inward-collapse motion conveys "gather here" much more directly than
+ * concentric rings (which were too easily confused with the here-ping).
+ * Pairs with the receiver-side viewport pan.
  */
 function createRallyVisual({ color, size }: VisualOptions): PingVisual {
     const container = new PIXI.Container();
     const outerR = size * RALLY_OUTER_RATIO;
     const innerR = size * RALLY_INNER_RATIO;
+    const armLen = size * RALLY_ARROW_HALF_SPAN;
 
-    const rings: PixiGraphics[] = [];
-    for (let i = 0; i < RALLY_RING_COUNT; i++) {
-        const ring = new PIXI.Graphics();
-        container.addChild(ring);
-        rings.push(ring);
+    // Four chevrons, each rotated to its cardinal direction. The chevron
+    // itself is drawn pointing toward the negative-X axis (i.e. inward
+    // toward (0,0) when at +X). Rotation places each arrow at N/E/S/W
+    // pointing toward center.
+    const arrows: PixiGraphics[] = [];
+    for (let i = 0; i < RALLY_ARROW_COUNT; i++) {
+        const g = new PIXI.Graphics();
+        g.rotation = (i / RALLY_ARROW_COUNT) * Math.PI * 2;
+        container.addChild(g);
+        arrows.push(g);
     }
 
     function update(elapsedMs: number): void {
-        for (let i = 0; i < RALLY_RING_COUNT; i++) {
-            const phase = ((elapsedMs / RALLY_CYCLE_MS) + i / RALLY_RING_COUNT) % 1;
-            const radius = innerR + (outerR - innerR) * phase;
-            const alpha = RALLY_BASE_ALPHA * (1 - phase * 0.7);
-            const ring = rings[i];
-            ring.clear();
-            ring.lineStyle(RALLY_LINE_WIDTH, color, alpha);
-            ring.drawCircle(0, 0, radius);
+        for (let i = 0; i < RALLY_ARROW_COUNT; i++) {
+            // Stagger so the four arrows aren't in lockstep — looks more
+            // organic and you can always see at least one mid-travel.
+            const phase = ((elapsedMs / RALLY_CYCLE_MS) + i / RALLY_ARROW_COUNT) % 1;
+            const radius = outerR - (outerR - innerR) * phase;
+            // Clamp the arm so the tip (radius - armLen) never crosses
+            // past the menu center as the chevron approaches innerR.
+            // Without this, arm overshoots when radius < armLen and the
+            // chevron visibly inverts.
+            const safeArm = Math.min(armLen, radius * 0.85);
+            // Fade in fast, hold, then fade as it reaches the center.
+            const fade = phase < 0.15 ? phase / 0.15 : 1 - (phase - 0.15) / 0.85;
+            const alpha = RALLY_BASE_ALPHA * fade;
+            const g = arrows[i];
+            g.clear();
+            g.lineStyle(RALLY_LINE_WIDTH, color, alpha);
+            // Chevron tip points inward (toward -X), back at +X radius.
+            g.moveTo(radius, -safeArm);
+            g.lineTo(radius - safeArm, 0);
+            g.lineTo(radius, safeArm);
         }
     }
 
@@ -210,43 +230,75 @@ function createTextVisual({ color, text }: VisualOptions): PingVisual {
 
 // ── token-attach ──────────────────────────────────────────────────
 
-const TOKEN_BRACKET_LINE_WIDTH = 3;
+const TOKEN_FRAME_COUNT = 3;
+const TOKEN_CYCLE_MS = 1400;
+const TOKEN_LINE_WIDTH = 3;
+const TOKEN_BASE_ALPHA = 0.95;
+const TOKEN_OUTER_RATIO = 0.55;
+const TOKEN_INNER_RATIO = 0.22;
+const TOKEN_ARM_RATIO = 0.18;
 
 /**
- * "Token-attach" ping: four corner brackets framing the followed token.
+ * "Token-attach" ping: four corner brackets framing the followed token,
+ * continuously contracting inward like a closing reticle. Three
+ * staggered frames sweep from the outer corner-offset to the inner
+ * offset and fade, so at any moment at least one frame is mid-travel —
+ * the eye reads "marked / locked, hands off". Movement of the token is
+ * blocked while the ping is active (handled by the api layer).
+ *
  * The container's x/y is updated each frame by `createPing`'s position
- * provider so the brackets stay locked to the moving token. Static visual
- * (no rotation/pulse) so the underlying token remains the focus.
+ * provider so the brackets stay locked to the moving token even
+ * mid-animation.
  */
 function createTokenAttachVisual({ color, size }: VisualOptions): PingVisual {
     const container = new PIXI.Container();
-    const cornerOffset = size * 0.5;
-    const armLength = size * 0.2;
+    const outerOffset = size * TOKEN_OUTER_RATIO;
+    const innerOffset = size * TOKEN_INNER_RATIO;
+    const baseArmLen = size * TOKEN_ARM_RATIO;
 
-    const brackets = new PIXI.Graphics();
-    brackets.lineStyle(TOKEN_BRACKET_LINE_WIDTH, color, 0.95);
-    // Top-left.
-    brackets.moveTo(-cornerOffset, -cornerOffset + armLength);
-    brackets.lineTo(-cornerOffset, -cornerOffset);
-    brackets.lineTo(-cornerOffset + armLength, -cornerOffset);
-    // Top-right.
-    brackets.moveTo(cornerOffset - armLength, -cornerOffset);
-    brackets.lineTo(cornerOffset, -cornerOffset);
-    brackets.lineTo(cornerOffset, -cornerOffset + armLength);
-    // Bottom-right.
-    brackets.moveTo(cornerOffset, cornerOffset - armLength);
-    brackets.lineTo(cornerOffset, cornerOffset);
-    brackets.lineTo(cornerOffset - armLength, cornerOffset);
-    // Bottom-left.
-    brackets.moveTo(-cornerOffset + armLength, cornerOffset);
-    brackets.lineTo(-cornerOffset, cornerOffset);
-    brackets.lineTo(-cornerOffset, cornerOffset - armLength);
-    container.addChild(brackets);
-
-    function update(_elapsedMs: number): void {
-        // Position-follow happens externally via createPing's positionProvider.
+    const frames: PixiGraphics[] = [];
+    for (let i = 0; i < TOKEN_FRAME_COUNT; i++) {
+        const g = new PIXI.Graphics();
+        container.addChild(g);
+        frames.push(g);
     }
 
+    function drawFrame(g: PixiGraphics, offset: number, alpha: number): void {
+        // Clamp arm length so it never overshoots the bracket's own
+        // corner — keeps the shape readable as the frame contracts.
+        const armLen = Math.min(baseArmLen, offset * 0.7);
+        g.clear();
+        g.lineStyle(TOKEN_LINE_WIDTH, color, alpha);
+        // Top-left
+        g.moveTo(-offset, -offset + armLen);
+        g.lineTo(-offset, -offset);
+        g.lineTo(-offset + armLen, -offset);
+        // Top-right
+        g.moveTo(offset - armLen, -offset);
+        g.lineTo(offset, -offset);
+        g.lineTo(offset, -offset + armLen);
+        // Bottom-right
+        g.moveTo(offset, offset - armLen);
+        g.lineTo(offset, offset);
+        g.lineTo(offset - armLen, offset);
+        // Bottom-left
+        g.moveTo(-offset + armLen, offset);
+        g.lineTo(-offset, offset);
+        g.lineTo(-offset, offset - armLen);
+    }
+
+    function update(elapsedMs: number): void {
+        for (let i = 0; i < TOKEN_FRAME_COUNT; i++) {
+            const phase = ((elapsedMs / TOKEN_CYCLE_MS) + i / TOKEN_FRAME_COUNT) % 1;
+            const offset = outerOffset - (outerOffset - innerOffset) * phase;
+            // Quick fade-in (0–15%), fade out across remainder.
+            const fade = phase < 0.15 ? phase / 0.15 : 1 - (phase - 0.15) / 0.85;
+            const alpha = TOKEN_BASE_ALPHA * fade;
+            drawFrame(frames[i], offset, alpha);
+        }
+    }
+
+    update(0);
     return { container, update };
 }
 

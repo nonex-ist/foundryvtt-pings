@@ -111,6 +111,17 @@ interface FoundryTokenLayer {
     placeables: ReadonlyArray<FoundryToken>;
 }
 
+interface FoundryMouseInteractionManager {
+    /**
+     * Cancel the manager's current interaction (drag, click, etc.) and
+     * reset its state to HOVER. If a drag was in progress the dragged
+     * target snaps back to its original position. Safe to call when no
+     * interaction is in flight — it short-circuits via state check.
+     * Event arg is optional; if omitted, Foundry synthesizes one.
+     */
+    cancel(event?: unknown): void;
+}
+
 interface FoundryCanvas {
     ready: boolean;
     app: PixiAppLike;
@@ -120,6 +131,8 @@ interface FoundryCanvas {
     scene: FoundryScene | null;
     tokens: FoundryTokenLayer;
     animatePan(opts: { x?: number; y?: number; scale?: number; duration?: number }): Promise<unknown>;
+    /** Set when a layer's MouseInteractionManager is mid-interaction. Null otherwise. */
+    currentMouseManager: FoundryMouseInteractionManager | null;
 }
 
 declare const PIXI: {
@@ -172,7 +185,15 @@ interface FoundryGame {
     modules?: { get(id: string): FoundryGameModule | undefined };
     socket?: FoundrySocket;
     settings?: FoundrySettings;
-    i18n?: { localize(key: string): string };
+    i18n?: {
+        /**
+         * Look up a translation by key, optionally interpolating `{name}`-
+         * style placeholders from `data`. Returns the key itself if no
+         * translation is found, so calls are safe in worlds whose lang
+         * file doesn't ship our strings yet.
+         */
+        localize(key: string, data?: Record<string, unknown>): string;
+    };
 }
 
 interface FoundryNotifications {
@@ -186,9 +207,45 @@ interface FoundryUI {
 }
 
 declare const game: FoundryGame;
+interface FoundryControlsLayerCtor {
+    prototype: {
+        _onLongPress?: (...args: unknown[]) => unknown;
+    };
+}
+
+interface FoundryDialogV2Button {
+    label?: string;
+    icon?: string;
+    default?: boolean;
+    action?: string;
+}
+
+interface FoundryDialogV2Config {
+    window?: { title?: string };
+    content?: string;
+    ok?: FoundryDialogV2Button;
+    rejectClose?: boolean;
+    position?: { width?: number };
+}
+
 declare const foundry: {
     utils: {
         randomID(length?: number): string;
+    };
+    canvas?: {
+        layers?: {
+            ControlsLayer?: FoundryControlsLayerCtor;
+        };
+    };
+    applications?: {
+        api?: {
+            DialogV2?: {
+                /** Form-input dialog. Resolves to the form's parsed values (`{ [name]: value }`), or `null` if the user dismissed the dialog. */
+                input(config: FoundryDialogV2Config): Promise<Record<string, unknown> | null>;
+                /** Plain prompt dialog. Resolves to whatever the OK button's callback returned, or `null` on dismiss. */
+                prompt(config: FoundryDialogV2Config): Promise<unknown>;
+            };
+        };
     };
 };
 declare const canvas: FoundryCanvas;

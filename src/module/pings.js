@@ -9,11 +9,12 @@ var DEFAULT_PING_COLOR = 11184810;
 var KIND_DEFAULT_DURATION_MS = {
   here: 6e3,
   rally: 6e3,
-  alert: 1e4,
+  alert: 5e3,
   text: 6e3,
   "token-attach": 4e3
 };
 var ALERT_COLOR = 16724787;
+var RALLY_COLOR = 16762432;
 var MIN_RALLY_ROLE = 2;
 var MIN_ALERT_ROLE = 3;
 var RATE_LIMIT_CAPACITY = 3;
@@ -251,31 +252,38 @@ function createHereVisual({ color, size }) {
   update(0);
   return { container, update };
 }
-var RALLY_RING_COUNT = 3;
-var RALLY_CYCLE_MS = 1500;
-var RALLY_LINE_WIDTH = 3;
-var RALLY_BASE_ALPHA = 0.85;
-var RALLY_INNER_RATIO = 0.1;
+var RALLY_ARROW_COUNT = 4;
+var RALLY_CYCLE_MS = 1100;
+var RALLY_LINE_WIDTH = 4;
+var RALLY_BASE_ALPHA = 0.95;
 var RALLY_OUTER_RATIO = 0.85;
+var RALLY_INNER_RATIO = 0.1;
+var RALLY_ARROW_HALF_SPAN = 0.18;
 function createRallyVisual({ color, size }) {
   const container = new PIXI.Container();
   const outerR = size * RALLY_OUTER_RATIO;
   const innerR = size * RALLY_INNER_RATIO;
-  const rings = [];
-  for (let i = 0; i < RALLY_RING_COUNT; i++) {
-    const ring = new PIXI.Graphics();
-    container.addChild(ring);
-    rings.push(ring);
+  const armLen = size * RALLY_ARROW_HALF_SPAN;
+  const arrows = [];
+  for (let i = 0; i < RALLY_ARROW_COUNT; i++) {
+    const g = new PIXI.Graphics();
+    g.rotation = i / RALLY_ARROW_COUNT * Math.PI * 2;
+    container.addChild(g);
+    arrows.push(g);
   }
   function update(elapsedMs) {
-    for (let i = 0; i < RALLY_RING_COUNT; i++) {
-      const phase = (elapsedMs / RALLY_CYCLE_MS + i / RALLY_RING_COUNT) % 1;
-      const radius = innerR + (outerR - innerR) * phase;
-      const alpha = RALLY_BASE_ALPHA * (1 - phase * 0.7);
-      const ring = rings[i];
-      ring.clear();
-      ring.lineStyle(RALLY_LINE_WIDTH, color, alpha);
-      ring.drawCircle(0, 0, radius);
+    for (let i = 0; i < RALLY_ARROW_COUNT; i++) {
+      const phase = (elapsedMs / RALLY_CYCLE_MS + i / RALLY_ARROW_COUNT) % 1;
+      const radius = outerR - (outerR - innerR) * phase;
+      const safeArm = Math.min(armLen, radius * 0.85);
+      const fade = phase < 0.15 ? phase / 0.15 : 1 - (phase - 0.15) / 0.85;
+      const alpha = RALLY_BASE_ALPHA * fade;
+      const g = arrows[i];
+      g.clear();
+      g.lineStyle(RALLY_LINE_WIDTH, color, alpha);
+      g.moveTo(radius, -safeArm);
+      g.lineTo(radius - safeArm, 0);
+      g.lineTo(radius, safeArm);
     }
   }
   update(0);
@@ -355,28 +363,51 @@ function createTextVisual({ color, text }) {
   }
   return { container, update };
 }
-var TOKEN_BRACKET_LINE_WIDTH = 3;
+var TOKEN_FRAME_COUNT = 3;
+var TOKEN_CYCLE_MS = 1400;
+var TOKEN_LINE_WIDTH = 3;
+var TOKEN_BASE_ALPHA = 0.95;
+var TOKEN_OUTER_RATIO = 0.55;
+var TOKEN_INNER_RATIO = 0.22;
+var TOKEN_ARM_RATIO = 0.18;
 function createTokenAttachVisual({ color, size }) {
   const container = new PIXI.Container();
-  const cornerOffset = size * 0.5;
-  const armLength = size * 0.2;
-  const brackets = new PIXI.Graphics();
-  brackets.lineStyle(TOKEN_BRACKET_LINE_WIDTH, color, 0.95);
-  brackets.moveTo(-cornerOffset, -cornerOffset + armLength);
-  brackets.lineTo(-cornerOffset, -cornerOffset);
-  brackets.lineTo(-cornerOffset + armLength, -cornerOffset);
-  brackets.moveTo(cornerOffset - armLength, -cornerOffset);
-  brackets.lineTo(cornerOffset, -cornerOffset);
-  brackets.lineTo(cornerOffset, -cornerOffset + armLength);
-  brackets.moveTo(cornerOffset, cornerOffset - armLength);
-  brackets.lineTo(cornerOffset, cornerOffset);
-  brackets.lineTo(cornerOffset - armLength, cornerOffset);
-  brackets.moveTo(-cornerOffset + armLength, cornerOffset);
-  brackets.lineTo(-cornerOffset, cornerOffset);
-  brackets.lineTo(-cornerOffset, cornerOffset - armLength);
-  container.addChild(brackets);
-  function update(_elapsedMs) {
+  const outerOffset = size * TOKEN_OUTER_RATIO;
+  const innerOffset = size * TOKEN_INNER_RATIO;
+  const baseArmLen = size * TOKEN_ARM_RATIO;
+  const frames = [];
+  for (let i = 0; i < TOKEN_FRAME_COUNT; i++) {
+    const g = new PIXI.Graphics();
+    container.addChild(g);
+    frames.push(g);
   }
+  function drawFrame(g, offset, alpha) {
+    const armLen = Math.min(baseArmLen, offset * 0.7);
+    g.clear();
+    g.lineStyle(TOKEN_LINE_WIDTH, color, alpha);
+    g.moveTo(-offset, -offset + armLen);
+    g.lineTo(-offset, -offset);
+    g.lineTo(-offset + armLen, -offset);
+    g.moveTo(offset - armLen, -offset);
+    g.lineTo(offset, -offset);
+    g.lineTo(offset, -offset + armLen);
+    g.moveTo(offset, offset - armLen);
+    g.lineTo(offset, offset);
+    g.lineTo(offset - armLen, offset);
+    g.moveTo(-offset + armLen, offset);
+    g.lineTo(-offset, offset);
+    g.lineTo(-offset, offset - armLen);
+  }
+  function update(elapsedMs) {
+    for (let i = 0; i < TOKEN_FRAME_COUNT; i++) {
+      const phase = (elapsedMs / TOKEN_CYCLE_MS + i / TOKEN_FRAME_COUNT) % 1;
+      const offset = outerOffset - (outerOffset - innerOffset) * phase;
+      const fade = phase < 0.15 ? phase / 0.15 : 1 - (phase - 0.15) / 0.85;
+      const alpha = TOKEN_BASE_ALPHA * fade;
+      drawFrame(frames[i], offset, alpha);
+    }
+  }
+  update(0);
   return { container, update };
 }
 function createPingVisual(kind, opts) {
@@ -487,17 +518,51 @@ function warnUser(message) {
     console.warn(`${MODULE_ID} | ${message}`);
   }
 }
+function i18n(key, fallback, data) {
+  const localized = game.i18n?.localize(key, data);
+  if (!localized || localized === key) {
+    if (!data) return fallback;
+    return fallback.replace(/\{(\w+)\}/g, (_, k) => String(data[k] ?? ""));
+  }
+  return localized;
+}
 function isCurrentSceneDisabled() {
   return canvas.scene?.getFlag(MODULE_ID, SCENE_FLAG_DISABLED) === true;
 }
 function createApi(config) {
   const registry = /* @__PURE__ */ new Map();
+  const attachedTokens = /* @__PURE__ */ new Map();
+  const trackAttach = (tokenId) => {
+    attachedTokens.set(tokenId, (attachedTokens.get(tokenId) ?? 0) + 1);
+  };
+  const untrackAttach = (tokenId) => {
+    const next = (attachedTokens.get(tokenId) ?? 0) - 1;
+    if (next <= 0) attachedTokens.delete(tokenId);
+    else attachedTokens.set(tokenId, next);
+  };
+  Hooks.on("preUpdateToken", (...args) => {
+    const tokenDoc = args[0];
+    const changes = args[1];
+    if (!tokenDoc?.id || !changes) return void 0;
+    const moves = changes.x !== void 0 || changes.y !== void 0 || changes.rotation !== void 0;
+    if (!moves) return void 0;
+    if (!attachedTokens.has(tokenDoc.id)) return void 0;
+    ui.notifications?.warn(
+      i18n(
+        "pings.notifications.tokenMovementBlocked",
+        "Pings: {name} is marked \u2014 movement blocked until the marker fades.",
+        { name: tokenDoc.name ?? "token" }
+      )
+    );
+    return false;
+  });
   function displayLocally(payload) {
     let positionProvider;
     if (payload.kind === "token-attach" && payload.tokenId) {
       const tokenId = payload.tokenId;
       const fallback = payload.position;
       positionProvider = () => canvas.tokens?.get(tokenId)?.center ?? fallback;
+      trackAttach(tokenId);
     }
     const handle = createPing({
       kind: payload.kind,
@@ -509,6 +574,9 @@ function createApi(config) {
       positionProvider,
       onDispose: () => {
         registry.delete(payload.id);
+        if (payload.kind === "token-attach" && payload.tokenId) {
+          untrackAttach(payload.tokenId);
+        }
       }
     });
     if (payload.kind === "rally" && payload.moveCanvas && config.userRoleProvider() >= getMinRallyRole()) {
@@ -536,6 +604,8 @@ function createApi(config) {
       color = assertColor(opts.color);
     } else if (kind === "alert") {
       color = ALERT_COLOR;
+    } else if (kind === "rally") {
+      color = RALLY_COLOR;
     } else {
       color = config.senderColorProvider();
     }
@@ -580,7 +650,12 @@ function createApi(config) {
   }
   function checkSenderRole(kind) {
     if (kind === "alert" && config.userRoleProvider() < getMinAlertRole()) {
-      warnUser("Alert pings require Assistant role or higher.");
+      warnUser(
+        i18n(
+          "pings.notifications.alertRoleRequired",
+          "Alert pings require Assistant role or higher."
+        )
+      );
       return false;
     }
     return true;
@@ -739,11 +814,51 @@ function eventMatches(event, spec) {
 
 // src/module/input/radial-menu.ts
 var RADIAL_SEGMENTS = [
-  { kind: "rally", angleCenter: -Math.PI / 2, label: "Rally" },
-  { kind: "alert", angleCenter: 0, label: "Alert" },
-  { kind: "text", angleCenter: Math.PI / 2, label: "Text" },
-  { kind: "token-attach", angleCenter: Math.PI, label: "Token" }
+  { kind: "rally", angleCenter: -Math.PI / 2, i18n: "pings.radial.rally", fallback: "Rally" },
+  { kind: "alert", angleCenter: 0, i18n: "pings.radial.alert", fallback: "Alert" },
+  { kind: "text", angleCenter: Math.PI / 2, i18n: "pings.radial.text", fallback: "Text" },
+  { kind: "token-attach", angleCenter: Math.PI, i18n: "pings.radial.token", fallback: "Token" }
 ];
+function tr(key, fallback) {
+  const out = game.i18n?.localize(key);
+  return out && out !== key ? out : fallback;
+}
+function colorToHex(value) {
+  return `#${Math.max(0, Math.min(16777215, value)).toString(16).padStart(6, "0")}`;
+}
+function darken(color, ratio) {
+  const r = Math.max(0, Math.min(255, Math.floor((color >> 16 & 255) * ratio)));
+  const g = Math.max(0, Math.min(255, Math.floor((color >> 8 & 255) * ratio)));
+  const b = Math.max(0, Math.min(255, Math.floor((color & 255) * ratio)));
+  return r << 16 | g << 8 | b;
+}
+function lighten(color, amount) {
+  const r = color >> 16 & 255;
+  const g = color >> 8 & 255;
+  const b = color & 255;
+  const nr = Math.floor(r + (255 - r) * amount);
+  const ng = Math.floor(g + (255 - g) * amount);
+  const nb = Math.floor(b + (255 - b) * amount);
+  return nr << 16 | ng << 8 | nb;
+}
+var GRADIENT_INNER_RATIO = 0.4;
+function buildRadialGradient(id, color) {
+  const grad = document.createElementNS(SVG_NS, "radialGradient");
+  grad.setAttribute("id", id);
+  grad.setAttribute("cx", "0");
+  grad.setAttribute("cy", "0");
+  grad.setAttribute("r", `${OUTER_RADIUS_PX}`);
+  grad.setAttribute("gradientUnits", "userSpaceOnUse");
+  const dark = document.createElementNS(SVG_NS, "stop");
+  dark.setAttribute("offset", "0%");
+  dark.setAttribute("stop-color", colorToHex(darken(color, GRADIENT_INNER_RATIO)));
+  grad.appendChild(dark);
+  const bright = document.createElementNS(SVG_NS, "stop");
+  bright.setAttribute("offset", "100%");
+  bright.setAttribute("stop-color", colorToHex(color));
+  grad.appendChild(bright);
+  return grad;
+}
 function pickKindFromDelta(deltaX, deltaY, deadzonePx) {
   const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
   if (dist < deadzonePx) return "here";
@@ -753,45 +868,155 @@ function pickKindFromDelta(deltaX, deltaY, deadzonePx) {
   if (angle >= -(3 * Math.PI) / 4 && angle < -Math.PI / 4) return "rally";
   return "token-attach";
 }
-var SEGMENT_RADIUS_PX = 70;
+var SVG_NS = "http://www.w3.org/2000/svg";
+var INNER_RADIUS_PX = 32;
+var OUTER_RADIUS_PX = 108;
+var CENTER_RADIUS_PX = 28;
+var LABEL_RADIUS_PX = (INNER_RADIUS_PX + OUTER_RADIUS_PX) / 2;
+var SVG_HALF_SIZE_PX = OUTER_RADIUS_PX + 12;
+var SVG_SIZE_PX = SVG_HALF_SIZE_PX * 2;
+function arcPath(innerR, outerR, startAngle, endAngle) {
+  const x1i = innerR * Math.cos(startAngle);
+  const y1i = innerR * Math.sin(startAngle);
+  const x1o = outerR * Math.cos(startAngle);
+  const y1o = outerR * Math.sin(startAngle);
+  const x2o = outerR * Math.cos(endAngle);
+  const y2o = outerR * Math.sin(endAngle);
+  const x2i = innerR * Math.cos(endAngle);
+  const y2i = innerR * Math.sin(endAngle);
+  return `M ${x1i} ${y1i} L ${x1o} ${y1o} A ${outerR} ${outerR} 0 0 1 ${x2o} ${y2o} L ${x2i} ${y2i} A ${innerR} ${innerR} 0 0 0 ${x1i} ${y1i} Z`;
+}
 function openRadialMenu(opts) {
   const root = document.createElement("div");
-  root.className = "pings-radial-menu";
+  root.className = "pings-radial-menu pings-radial-menu--passive";
   root.style.left = `${opts.clientX}px`;
   root.style.top = `${opts.clientY}px`;
-  const center = document.createElement("div");
-  center.className = "pings-radial-segment pings-radial-center";
-  center.textContent = "Here";
-  root.appendChild(center);
-  const segments = /* @__PURE__ */ new Map([["here", center]]);
+  const userBase = opts.userColor;
+  const userLight = lighten(opts.userColor, 0.4);
+  const userDark = darken(opts.userColor, 0.55);
+  root.style.setProperty("--pings-user-base", colorToHex(userBase));
+  root.style.setProperty("--pings-user-light", colorToHex(userLight));
+  root.style.setProperty("--pings-user-dark", colorToHex(userDark));
+  const disabledKinds = new Set(opts.disabledKinds ?? []);
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "pings-radial-svg");
+  svg.setAttribute("width", `${SVG_SIZE_PX}`);
+  svg.setAttribute("height", `${SVG_SIZE_PX}`);
+  svg.setAttribute(
+    "viewBox",
+    `${-SVG_HALF_SIZE_PX} ${-SVG_HALF_SIZE_PX} ${SVG_SIZE_PX} ${SVG_SIZE_PX}`
+  );
+  root.appendChild(svg);
+  const defs = document.createElementNS(SVG_NS, "defs");
+  defs.appendChild(buildRadialGradient("pings-grad-rally", 16762432));
+  defs.appendChild(buildRadialGradient("pings-grad-alert", 16724787));
+  defs.appendChild(buildRadialGradient("pings-grad-text", userLight));
+  defs.appendChild(buildRadialGradient("pings-grad-token", userDark));
+  svg.appendChild(defs);
+  const segments = /* @__PURE__ */ new Map();
   for (const seg of RADIAL_SEGMENTS) {
-    const el = document.createElement("div");
-    el.className = "pings-radial-segment";
-    el.textContent = seg.label;
-    const offsetX = Math.cos(seg.angleCenter) * SEGMENT_RADIUS_PX;
-    const offsetY = Math.sin(seg.angleCenter) * SEGMENT_RADIUS_PX;
-    el.style.setProperty("--pings-tx", `${offsetX}px`);
-    el.style.setProperty("--pings-ty", `${offsetY}px`);
-    root.appendChild(el);
-    segments.set(seg.kind, el);
+    const path = document.createElementNS(SVG_NS, "path");
+    let className = "pings-radial-segment";
+    if (disabledKinds.has(seg.kind)) className += " pings-radial-disabled";
+    path.setAttribute("class", className);
+    path.dataset.kind = seg.kind;
+    const half = Math.PI / 4;
+    path.setAttribute(
+      "d",
+      arcPath(
+        INNER_RADIUS_PX,
+        OUTER_RADIUS_PX,
+        seg.angleCenter - half,
+        seg.angleCenter + half
+      )
+    );
+    svg.appendChild(path);
+    segments.set(seg.kind, path);
   }
+  const center = document.createElementNS(SVG_NS, "circle");
+  center.setAttribute("class", "pings-radial-segment pings-radial-center");
+  center.dataset.kind = "here";
+  center.setAttribute("cx", "0");
+  center.setAttribute("cy", "0");
+  center.setAttribute("r", `${CENTER_RADIUS_PX}`);
+  svg.appendChild(center);
+  segments.set("here", center);
+  const centerRing = document.createElementNS(SVG_NS, "circle");
+  centerRing.setAttribute("class", "pings-radial-center-ring");
+  centerRing.setAttribute("cx", "0");
+  centerRing.setAttribute("cy", "0");
+  centerRing.setAttribute("r", `${CENTER_RADIUS_PX + 3.5}`);
+  svg.appendChild(centerRing);
+  const outerRing = document.createElementNS(SVG_NS, "circle");
+  outerRing.setAttribute("class", "pings-radial-outer-ring");
+  outerRing.setAttribute("cx", "0");
+  outerRing.setAttribute("cy", "0");
+  outerRing.setAttribute("r", `${OUTER_RADIUS_PX + 0.5}`);
+  svg.appendChild(outerRing);
+  for (const seg of RADIAL_SEGMENTS) {
+    const label = document.createElementNS(SVG_NS, "text");
+    let labelClass = "pings-radial-label";
+    if (disabledKinds.has(seg.kind)) labelClass += " pings-radial-disabled";
+    label.setAttribute("class", labelClass);
+    label.setAttribute("x", `${LABEL_RADIUS_PX * Math.cos(seg.angleCenter)}`);
+    label.setAttribute("y", `${LABEL_RADIUS_PX * Math.sin(seg.angleCenter)}`);
+    label.setAttribute("text-anchor", "middle");
+    label.setAttribute("dominant-baseline", "middle");
+    label.textContent = tr(seg.i18n, seg.fallback);
+    svg.appendChild(label);
+  }
+  const centerLabel = document.createElementNS(SVG_NS, "text");
+  centerLabel.setAttribute("class", "pings-radial-label pings-radial-center-label");
+  centerLabel.setAttribute("x", "0");
+  centerLabel.setAttribute("y", "0");
+  centerLabel.setAttribute("text-anchor", "middle");
+  centerLabel.setAttribute("dominant-baseline", "middle");
+  centerLabel.textContent = tr("pings.radial.ping", "Ping");
+  svg.appendChild(centerLabel);
   document.body.appendChild(root);
+  let active = false;
   let currentHighlight = null;
-  const highlight = (kind) => {
-    if (currentHighlight === kind) return;
+  const clearHighlight = () => {
     if (currentHighlight !== null) {
-      segments.get(currentHighlight)?.classList.remove("pings-radial-active");
+      const el = segments.get(currentHighlight);
+      if (el) el.classList.remove("pings-radial-active");
+      currentHighlight = null;
     }
-    segments.get(kind)?.classList.add("pings-radial-active");
-    currentHighlight = kind;
   };
-  highlight("here");
+  const highlight = (kind) => {
+    if (!active) return;
+    const effective = disabledKinds.has(kind) ? "here" : kind;
+    if (currentHighlight === effective) return;
+    clearHighlight();
+    const el = segments.get(effective);
+    if (el) el.classList.add("pings-radial-active");
+    currentHighlight = effective;
+  };
   return {
+    setActive(value) {
+      if (active === value) return;
+      active = value;
+      if (active) {
+        root.classList.remove("pings-radial-menu--passive");
+      } else {
+        root.classList.add("pings-radial-menu--passive");
+        clearHighlight();
+      }
+    },
     onCursorMove(clientX, clientY) {
-      highlight(pickKindFromDelta(clientX - opts.clientX, clientY - opts.clientY, opts.deadzonePx));
+      if (!active) return;
+      highlight(
+        pickKindFromDelta(clientX - opts.clientX, clientY - opts.clientY, opts.deadzonePx)
+      );
     },
     getSelectedKind(clientX, clientY) {
-      return pickKindFromDelta(clientX - opts.clientX, clientY - opts.clientY, opts.deadzonePx);
+      if (!active) return "here";
+      const picked = pickKindFromDelta(
+        clientX - opts.clientX,
+        clientY - opts.clientY,
+        opts.deadzonePx
+      );
+      return disabledKinds.has(picked) ? "here" : picked;
     },
     destroy() {
       root.remove();
@@ -830,9 +1055,19 @@ function installTrigger(config) {
     const pointerId = ev.pointerId;
     const timerId = setTimeout(() => {
       if (!hold || hold.pointerId !== pointerId || hold.phase !== "holding") return;
+      try {
+        canvas.currentMouseManager?.cancel();
+      } catch (err) {
+        console.warn("pings | could not cancel native interaction", err);
+      }
       hold.phase = "preview";
       hold.timerId = null;
-      hold.previewDispose = config.callbacks.showPreview(startWorld);
+      const bundle = config.callbacks.showPreview(startWorld, {
+        x: startClientX,
+        y: startClientY
+      });
+      hold.previewDispose = bundle.previewDispose;
+      hold.menu = bundle.menu;
     }, config.holdDurationMs);
     hold = {
       phase: "holding",
@@ -858,14 +1093,9 @@ function installTrigger(config) {
     }
     if (hold.phase === "preview") {
       if (distSq >= config.menuSummonPx * config.menuSummonPx) {
-        hold.previewDispose?.();
-        hold.previewDispose = null;
-        hold.menu = config.callbacks.openMenu(
-          { x: hold.startClientX, y: hold.startClientY },
-          hold.startWorld
-        );
+        hold.menu?.setActive(true);
+        hold.menu?.onCursorMove(ev.clientX, ev.clientY);
         hold.phase = "menu";
-        hold.menu.onCursorMove(ev.clientX, ev.clientY);
       }
       return;
     }
@@ -880,8 +1110,14 @@ function installTrigger(config) {
       commitKind = hold.menu.getSelectedKind(ev.clientX, ev.clientY);
     }
     const commitPosition = hold.startWorld;
+    const previewDispose = hold.previewDispose;
+    hold.previewDispose = null;
     reset();
-    if (commitKind !== null) config.callbacks.commit(commitKind, commitPosition);
+    if (commitKind !== null) {
+      config.callbacks.commit(commitKind, commitPosition, previewDispose);
+    } else if (previewDispose) {
+      previewDispose();
+    }
   };
   const onPointerCancel = (ev) => {
     if (!hold || hold.pointerId !== ev.pointerId) return;
@@ -897,6 +1133,25 @@ function installTrigger(config) {
     view.removeEventListener("pointermove", onPointerMove);
     view.removeEventListener("pointerup", onPointerUp);
     view.removeEventListener("pointercancel", onPointerCancel);
+  };
+}
+
+// src/module/native-ping.ts
+var restore = null;
+function suppressNativeLongPress() {
+  if (restore) return;
+  const proto = foundry.canvas?.layers?.ControlsLayer?.prototype;
+  if (!proto || typeof proto._onLongPress !== "function") {
+    console.warn(
+      `${MODULE_ID} | could not locate ControlsLayer._onLongPress \u2014 native long-press ping may still fire`
+    );
+    return;
+  }
+  const original = proto._onLongPress;
+  proto._onLongPress = function noop() {
+  };
+  restore = () => {
+    proto._onLongPress = original;
   };
 }
 
@@ -1004,6 +1259,29 @@ var teardownTrigger = null;
 var socketHandle = null;
 var apiBundle = null;
 var audio = null;
+var previewExpiresAt = 0;
+function tr2(key, fallback) {
+  const out = game.i18n?.localize(key);
+  return out && out !== key ? out : fallback;
+}
+function escapeHtml(value) {
+  return value.replace(/[&<>"']/g, (c) => {
+    switch (c) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return c;
+    }
+  });
+}
 function resolveUserColor() {
   const c = game.user?.color;
   if (typeof c === "number") return c;
@@ -1025,24 +1303,70 @@ function findTokenIdAt(position) {
   }
   return null;
 }
-function showPreviewPing(position) {
-  const id = apiBundle?.api.showHere(position) ?? null;
-  return () => {
-    if (id !== null) apiBundle?.api.remove(id, { broadcast: false });
+function showPreviewBundle(worldPosition, clientPosition) {
+  const previewDurationMs = KIND_DEFAULT_DURATION_MS.here;
+  const handle = createPing({
+    kind: "here",
+    position: worldPosition,
+    color: resolveUserColor(),
+    size: canvas.dimensions.size,
+    durationMs: previewDurationMs
+  });
+  previewExpiresAt = Date.now() + previewDurationMs + FADE_IN_MS + FADE_OUT_MS;
+  const disabledKinds = findTokenIdAt(worldPosition) ? [] : ["token-attach"];
+  const menu = openRadialMenu({
+    clientX: clientPosition.x,
+    clientY: clientPosition.y,
+    deadzonePx: getMenuSummonPx(),
+    userColor: resolveUserColor(),
+    disabledKinds
+  });
+  return {
+    previewDispose: () => handle.destroy(),
+    menu
   };
 }
-function commitPing(kind, position) {
-  if (!apiBundle) return;
+async function promptForTextPing(position) {
+  const dialog = foundry.applications?.api?.DialogV2;
+  if (!dialog) {
+    const text2 = window.prompt(tr2("pings.dialog.textPrompt", "Ping text:"));
+    if (text2) apiBundle?.api.ping("text", position, { text: text2 });
+    return;
+  }
+  const title = tr2("pings.dialog.textTitle", "Pings \u2014 text");
+  const label = tr2("pings.dialog.textLabel", "Text");
+  const confirm = tr2("pings.dialog.textConfirm", "Ping");
+  const result = await dialog.input({
+    window: { title },
+    content: `<div class="form-group"><label>${escapeHtml(label)}</label><input type="text" name="text" autofocus required maxlength="200" /></div>`,
+    ok: { label: confirm, icon: "fa-solid fa-location-crosshairs" }
+  });
+  const text = result?.text?.trim();
+  if (!text) return;
+  apiBundle?.api.ping("text", position, { text });
+}
+function commitPing(kind, position, previewDispose) {
+  if (!apiBundle) {
+    previewDispose?.();
+    return;
+  }
+  const previewAlive = previewDispose !== null && Date.now() < previewExpiresAt;
+  if (kind === "here" && previewAlive) {
+    audio?.play("here");
+    apiBundle.api.sendHere(position);
+    return;
+  }
+  previewDispose?.();
   if (kind === "text") {
-    const text = window.prompt("Pings \u2014 text:");
-    if (!text) return;
-    apiBundle.api.ping("text", position, { text });
+    void promptForTextPing(position);
     return;
   }
   if (kind === "token-attach") {
     const tokenId = findTokenIdAt(position);
     if (!tokenId) {
-      ui?.notifications?.warn("Pings: no token under the cursor.");
+      ui?.notifications?.warn(
+        tr2("pings.notifications.noTokenUnderCursor", "Pings: no token under the cursor.")
+      );
       return;
     }
     apiBundle.api.ping("token-attach", position, { tokenId });
@@ -1060,19 +1384,13 @@ function reinstallTrigger() {
     console.warn(`${MODULE_ID} | invalid trigger binding, falling back to LeftClick`, err);
     binding = parseBinding("LeftClick");
   }
-  const menuPx = getMenuSummonPx();
   teardownTrigger = installTrigger({
     binding,
     holdDurationMs: getHoldDurationMs(),
     holdCancelTolerancePx: getHoldCancelTolerancePx(),
-    menuSummonPx: menuPx,
+    menuSummonPx: getMenuSummonPx(),
     callbacks: {
-      showPreview: showPreviewPing,
-      openMenu: (clientPosition) => openRadialMenu({
-        clientX: clientPosition.x,
-        clientY: clientPosition.y,
-        deadzonePx: menuPx
-      }),
+      showPreview: showPreviewBundle,
       commit: commitPing
     }
   });
@@ -1085,6 +1403,7 @@ Hooks.once("init", () => {
     onAudioEnabledChanged: (enabled) => audio?.setEnabled(enabled),
     onAudioVolumeChanged: (volume) => audio?.setVolume(volume)
   });
+  suppressNativeLongPress();
   console.log(`${MODULE_ID} | init`);
 });
 Hooks.on("canvasReady", () => {

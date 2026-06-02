@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-06-02
+
+### Fixed
+
+- Foundry v14's built-in long-press canvas ping (`ControlsLayer._onLongPress`,
+  500ms on the token layer) is now suppressed at module init, so it no
+  longer fires alongside our gesture. Symptoms before the fix: pings
+  appeared twice on hold-release and the radial menu felt unresponsive
+  because the native handler consumed the interaction. There is no
+  built-in setting to disable the native ping, so we override the
+  prototype method with a no-op before any `ControlsLayer` instance
+  is constructed.
+
+### Changed
+
+- **Token movement is blocked while a token-attach ping is active.** A
+  new `preUpdateToken` hook returns false for any `x` / `y` / `rotation`
+  update targeting a token currently marked by a token-attach ping —
+  the attempted move is rejected and the user (typically a GM moving
+  the token themselves, or another player owner) sees a notification
+  explaining why. The lock is reference-counted, so multiple
+  concurrent attach pings on the same token release the lock only
+  when the last marker fades.
+- Preview-to-commit no longer double-renders for the "here" gesture. The
+  trigger now hands the preview disposer to the commit callback, which
+  keeps the preview alive when the commit is semantically the preview
+  ("here" from preview-state release) and broadcasts via `sendHere`
+  instead of re-rendering. Visible result: one continuous ping per
+  gesture instead of a preview-then-flash sequence. Non-here kinds and
+  menu-deadzone "here" still render fresh (preview was already disposed
+  or is being replaced by a different visual).
+- Preview is now silent. It used to fire the `pings.display` hook on
+  appearance (audio played at the 350ms preview-show mark), which
+  contradicted the "preview = preparing, release = ping" mental model.
+  The preview now bypasses the API entirely (visual-only `createPing`,
+  no hooks, no registry). Audio + display hook fire on commit. Net
+  effect: hold = silent visual feedback; release = sound + broadcast.
+
 ## [0.2.0] — 2026-06-02
 
 First release published through the signed CI pipeline. v0.1.0 was

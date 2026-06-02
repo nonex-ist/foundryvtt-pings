@@ -1,4 +1,4 @@
-import { ALERT_COLOR, KIND_DEFAULT_DURATION_MS, MODULE_ID } from '../constants.js';
+import { ALERT_COLOR, KIND_DEFAULT_DURATION_MS, MODULE_ID, RALLY_COLOR } from '../constants.js';
 import { SCENE_FLAG_DISABLED } from '../settings/keys.js';
 import { getMinAlertRole, getMinRallyRole } from '../settings/register.js';
 import type { DisplayPingPayload, RemovePingPayload } from '../network/messages.js';
@@ -72,12 +72,58 @@ function warnUser(message: string): void {
     }
 }
 
+function i18n(key: string, fallback: string, data?: Record<string, unknown>): string {
+    const localized = game.i18n?.localize(key, data);
+    if (!localized || localized === key) {
+        if (!data) return fallback;
+        // Apply the same {key}-style interpolation the fallback string uses.
+        return fallback.replace(/\{(\w+)\}/g, (_, k) => String(data[k] ?? ''));
+    }
+    return localized;
+}
+
 function isCurrentSceneDisabled(): boolean {
     return canvas.scene?.getFlag(MODULE_ID, SCENE_FLAG_DISABLED) === true;
 }
 
 export function createApi(config: CreateApiConfig): ApiBundle {
     const registry = new Map<string, PingHandle>();
+
+    // Reference count per token id — a token may have multiple concurrent
+    // attach pings (e.g. two players ping the same token within seconds);
+    // we only release the move-lock when the last ping fades.
+    const attachedTokens = new Map<string, number>();
+    const trackAttach = (tokenId: string): void => {
+        attachedTokens.set(tokenId, (attachedTokens.get(tokenId) ?? 0) + 1);
+    };
+    const untrackAttach = (tokenId: string): void => {
+        const next = (attachedTokens.get(tokenId) ?? 0) - 1;
+        if (next <= 0) attachedTokens.delete(tokenId);
+        else attachedTokens.set(tokenId, next);
+    };
+
+    // Block movement (x / y / rotation) of any token currently flagged
+    // as attached. Returning false from preUpdateToken cancels the update
+    // on the requester's client before it goes to the server.
+    Hooks.on('preUpdateToken', (...args: unknown[]) => {
+        const tokenDoc = args[0] as { id?: string; name?: string } | undefined;
+        const changes = args[1] as
+            | { x?: number; y?: number; rotation?: number }
+            | undefined;
+        if (!tokenDoc?.id || !changes) return undefined;
+        const moves =
+            changes.x !== undefined || changes.y !== undefined || changes.rotation !== undefined;
+        if (!moves) return undefined;
+        if (!attachedTokens.has(tokenDoc.id)) return undefined;
+        ui.notifications?.warn(
+            i18n(
+                'pings.notifications.tokenMovementBlocked',
+                'Pings: {name} is marked — movement blocked until the marker fades.',
+                { name: tokenDoc.name ?? 'token' },
+            ),
+        );
+        return false;
+    });
 
     function displayLocally(payload: DisplayPingPayload): PingHandle | null {
         // token-attach: rebuild position each frame from the followed token.
@@ -86,6 +132,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
             const tokenId = payload.tokenId;
             const fallback = payload.position;
             positionProvider = () => canvas.tokens?.get(tokenId)?.center ?? fallback;
+            trackAttach(tokenId);
         }
 
         const handle = createPing({
@@ -98,6 +145,9 @@ export function createApi(config: CreateApiConfig): ApiBundle {
             positionProvider,
             onDispose: () => {
                 registry.delete(payload.id);
+                if (payload.kind === 'token-attach' && payload.tokenId) {
+                    untrackAttach(payload.tokenId);
+                }
             },
         });
 
@@ -141,6 +191,8 @@ export function createApi(config: CreateApiConfig): ApiBundle {
             color = assertColor(opts.color);
         } else if (kind === 'alert') {
             color = ALERT_COLOR;
+        } else if (kind === 'rally') {
+            color = RALLY_COLOR;
         } else {
             color = config.senderColorProvider();
         }
@@ -199,7 +251,12 @@ export function createApi(config: CreateApiConfig): ApiBundle {
     /** Sender-side role gate: refuses to emit alert pings below the configured threshold. */
     function checkSenderRole(kind: PingKind): boolean {
         if (kind === 'alert' && config.userRoleProvider() < getMinAlertRole()) {
-            warnUser('Alert pings require Assistant role or higher.');
+            warnUser(
+                i18n(
+                    'pings.notifications.alertRoleRequired',
+                    'Alert pings require Assistant role or higher.',
+                ),
+            );
             return false;
         }
         return true;

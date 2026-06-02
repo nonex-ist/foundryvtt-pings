@@ -2,13 +2,29 @@
  *
  * The root is fixed-position at the press location with pointer-events:none
  * so the underlying canvas keeps receiving the pointer events — the trigger
- * is the single source of truth for the gesture. Each segment is positioned
- * via the --pings-tx / --pings-ty custom properties set in radial-menu.ts
- * (cardinal layout + center deadzone). Positioning lives in CSS so the
- * active-state highlight can compose translate() with scale() without an
- * inline transform overriding it. The active segment is highlighted via a
- * class swap. */
+ * is the single source of truth for the gesture. The four ring wedges +
+ * center circle live inside an SVG centered on the anchor; each segment's
+ * fill is dictated by its `data-kind` attribute so the menu visually mirrors
+ * what the resulting ping will look like (rally = gold, alert = red, others
+ * tinted with three shades of the local user's color: text uses
+ * --pings-user-light, center uses --pings-user-base, token uses
+ * --pings-user-dark, all set on the menu root from JS).
+ *
+ * Modes:
+ *   .pings-radial-menu--passive  — opens-with default, dim + smaller,
+ *                                   reads as "menu is available, drag to
+ *                                   select"; no highlight tracking
+ *   (default state)              — active mode, full opacity + scale,
+ *                                   highlight follows the cursor
+ *   .pings-radial-active         — applied to the segment under the
+ *                                   cursor (active mode only); bumps
+ *                                   stroke + adds a chip-color glow
+ *                                   pulse */
+
 .pings-radial-menu {
+    --pings-user-base: rgba(255, 255, 255, 0.85);
+    --pings-user-light: rgba(255, 255, 255, 0.95);
+    --pings-user-dark: rgba(255, 255, 255, 0.55);
     position: fixed;
     top: 0;
     left: 0;
@@ -18,37 +34,138 @@
     z-index: 60;
 }
 
-.pings-radial-segment {
+.pings-radial-svg {
     position: absolute;
     top: 0;
     left: 0;
-    width: 56px;
-    height: 56px;
-    margin: -28px 0 0 -28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.7);
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 12px;
-    font-weight: 600;
-    text-align: center;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    transform: translate(var(--pings-tx, 0), var(--pings-ty, 0));
-    transition: background-color 80ms ease-out, transform 80ms ease-out;
+    transform: translate(-50%, -50%);
+    transform-origin: center center;
+    transition:
+        opacity 180ms cubic-bezier(0.16, 1, 0.3, 1),
+        transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: visible;
+    /* Compound shadow: tight near-surface highlight + medium body +
+     * soft ambient. Reads as depth rather than a single dark drop. */
+    filter:
+        drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35))
+        drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3))
+        drop-shadow(0 14px 24px rgba(0, 0, 0, 0.32));
+}
+
+.pings-radial-menu--passive .pings-radial-svg {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(0.88);
+}
+
+.pings-radial-segment {
+    /* --chip-bg is the *solid* color reference for the glow filter on
+     * active state. The actual fill is a radial gradient (defined in the
+     * SVG <defs>) that runs dark at the inner edge to full color at the
+     * outer rim — makes the rim glow read as a highlight against the
+     * dimmer inner surface. */
+    --chip-bg: var(--pings-user-base);
+    stroke: rgba(0, 0, 0, 0.32);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+    transition:
+        stroke 160ms ease-out,
+        filter 160ms ease-out;
+}
+
+.pings-radial-segment[data-kind="rally"] {
+    --chip-bg: #ffc640;
+    fill: url(#pings-grad-rally);
+}
+.pings-radial-segment[data-kind="alert"] {
+    --chip-bg: #ff3333;
+    fill: url(#pings-grad-alert);
+}
+.pings-radial-segment[data-kind="text"] {
+    --chip-bg: var(--pings-user-light);
+    fill: url(#pings-grad-text);
+}
+.pings-radial-segment[data-kind="token-attach"] {
+    --chip-bg: var(--pings-user-dark);
+    fill: url(#pings-grad-token);
+}
+
+/* Center "Ping" chip stays a solid fill — it's small (28px radius) so a
+ * gradient would just look like a dark dot. Solid uses the *base* user
+ * color so the three user-colored chips read as a light/base/dark
+ * triplet (text/center/token). */
+.pings-radial-center {
+    --chip-bg: var(--pings-user-base);
+    fill: var(--chip-bg);
+    stroke: rgba(0, 0, 0, 0.45);
+    stroke-width: 1.5;
+}
+
+.pings-radial-center-ring,
+.pings-radial-outer-ring {
+    fill: none;
+    pointer-events: none;
+}
+
+.pings-radial-center-ring {
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 1.5;
+}
+
+.pings-radial-outer-ring {
+    stroke: rgba(255, 255, 255, 0.12);
+    stroke-width: 1;
+}
+
+/* Active state: rim brightens, glow pulses gently to feel alive. */
+@keyframes pings-radial-pulse {
+    0%, 100% {
+        filter: drop-shadow(0 0 6px var(--chip-bg))
+            drop-shadow(0 0 12px var(--chip-bg));
+    }
+    50% {
+        filter: drop-shadow(0 0 10px var(--chip-bg))
+            drop-shadow(0 0 22px var(--chip-bg));
+    }
 }
 
 .pings-radial-segment.pings-radial-active {
-    background: rgba(255, 255, 255, 0.9);
-    color: rgba(0, 0, 0, 0.9);
-    transform: translate(var(--pings-tx, 0), var(--pings-ty, 0)) scale(1.15);
+    stroke: rgba(255, 255, 255, 0.95);
+    stroke-width: 2.5;
+    animation: pings-radial-pulse 1.6s ease-in-out infinite;
 }
 
-.pings-radial-center {
-    width: 50px;
-    height: 50px;
-    margin: -25px 0 0 -25px;
-    background: rgba(0, 0, 0, 0.5);
+/* Disabled segment: flat grey fill (overrides the gradient), dim label.
+ * Cursor-over it lights the center "Ping" chip instead so the user
+ * sees the fallback. */
+.pings-radial-segment.pings-radial-disabled {
+    --chip-bg: #4a4a4a;
+    fill: #4a4a4a;
+    opacity: 0.55;
+    filter: saturate(0.4);
+}
+
+.pings-radial-label.pings-radial-disabled {
+    fill: rgba(255, 255, 255, 0.5);
+    opacity: 0.75;
+}
+
+.pings-radial-label {
+    fill: #ffffff;
+    font-family: "Signika", sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    pointer-events: none;
+    /* Outline trick: stroke drawn first, then fill on top — gives readable
+     * text on any chip color without needing per-kind text colors. */
+    paint-order: stroke fill;
+    stroke: rgba(0, 0, 0, 0.85);
+    stroke-width: 3;
+    stroke-linejoin: round;
+}
+
+.pings-radial-center-label {
     font-size: 11px;
+    letter-spacing: 0.08em;
 }
