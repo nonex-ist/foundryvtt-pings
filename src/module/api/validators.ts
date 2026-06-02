@@ -1,6 +1,14 @@
-import type { WorldPosition } from '../types.js';
+import type { PingKind, WorldPosition } from '../types.js';
 
 const MAX_COLOR = 0xffffff;
+
+const VALID_KINDS: ReadonlySet<PingKind> = new Set<PingKind>([
+    'here',
+    'rally',
+    'alert',
+    'text',
+    'token-attach',
+]);
 
 /**
  * Defensive validators for the public API surface. They throw on invalid
@@ -46,4 +54,12 @@ export function assertPositiveInt(value: unknown, name: string): number {
         throw new TypeError(`pings: ${name} must be a positive integer`);
     }
     return value;
+}
+
+export function assertKind(value: unknown, name = 'kind'): PingKind {
+    if (typeof value !== 'string' || !VALID_KINDS.has(value as PingKind)) {
+        const allowed = [...VALID_KINDS].join(', ');
+        throw new TypeError(`pings: ${name} must be one of: ${allowed}`);
+    }
+    return value as PingKind;
 }

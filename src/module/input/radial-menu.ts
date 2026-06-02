@@ -62,7 +62,6 @@ export interface OpenRadialMenuOptions {
 }
 
 const SEGMENT_RADIUS_PX = 70;
-const SEGMENT_HALF_SIZE_PX = 28;
 
 /**
  * Open the radial menu as a DOM overlay anchored at the press position.
@@ -91,9 +90,14 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
         const el = document.createElement('div');
         el.className = 'pings-radial-segment';
         el.textContent = seg.label;
-        const offsetX = Math.cos(seg.angleCenter) * SEGMENT_RADIUS_PX - SEGMENT_HALF_SIZE_PX;
-        const offsetY = Math.sin(seg.angleCenter) * SEGMENT_RADIUS_PX - SEGMENT_HALF_SIZE_PX;
-        el.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+        // Positioning rides on CSS custom properties (--pings-tx / --pings-ty)
+        // rather than an inline `transform`, so the .pings-radial-active class
+        // can compose the position with a scale() without being overridden by
+        // a more-specific inline transform.
+        const offsetX = Math.cos(seg.angleCenter) * SEGMENT_RADIUS_PX;
+        const offsetY = Math.sin(seg.angleCenter) * SEGMENT_RADIUS_PX;
+        el.style.setProperty('--pings-tx', `${offsetX}px`);
+        el.style.setProperty('--pings-ty', `${offsetY}px`);
         root.appendChild(el);
         segments.set(seg.kind, el);
     }

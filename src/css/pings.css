@@ -3,8 +3,11 @@
  * The root is fixed-position at the press location with pointer-events:none
  * so the underlying canvas keeps receiving the pointer events — the trigger
  * is the single source of truth for the gesture. Each segment is positioned
- * by inline CSS transform set in radial-menu.ts (cardinal layout + center
- * deadzone). The active segment is highlighted via a class swap. */
+ * via the --pings-tx / --pings-ty custom properties set in radial-menu.ts
+ * (cardinal layout + center deadzone). Positioning lives in CSS so the
+ * active-state highlight can compose translate() with scale() without an
+ * inline transform overriding it. The active segment is highlighted via a
+ * class swap. */
 .pings-radial-menu {
     position: fixed;
     top: 0;
@@ -32,13 +35,14 @@
     font-weight: 600;
     text-align: center;
     border: 1px solid rgba(255, 255, 255, 0.2);
+    transform: translate(var(--pings-tx, 0), var(--pings-ty, 0));
     transition: background-color 80ms ease-out, transform 80ms ease-out;
 }
 
 .pings-radial-segment.pings-radial-active {
     background: rgba(255, 255, 255, 0.9);
     color: rgba(0, 0, 0, 0.9);
-    transform: scale(1.15) translate(var(--pings-tx, 0), var(--pings-ty, 0));
+    transform: translate(var(--pings-tx, 0), var(--pings-ty, 0)) scale(1.15);
 }
 
 .pings-radial-center {

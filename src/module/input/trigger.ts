@@ -141,7 +141,7 @@ export function installTrigger(config: TriggerConfig): () => void {
         }
 
         if (hold.phase === 'preview') {
-            if (distSq > config.menuSummonPx * config.menuSummonPx) {
+            if (distSq >= config.menuSummonPx * config.menuSummonPx) {
                 hold.previewDispose?.();
                 hold.previewDispose = null;
                 hold.menu = config.callbacks.openMenu(

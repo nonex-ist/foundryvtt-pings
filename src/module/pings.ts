@@ -55,15 +55,10 @@ function showPreviewPing(position: WorldPosition): () => void {
 }
 
 function commitPing(kind: PingKind, position: WorldPosition): void {
-    if (kind === 'here') {
-        // The preview is still on screen at the same position with the user's
-        // color; broadcasting via sendHere lets peers see their own ping
-        // without us doubling up the local visual. The two ids diverge but
-        // the local user never sees both at once.
-        apiBundle?.api.sendHere(position);
-    } else {
-        apiBundle?.api.ping(kind, position);
-    }
+    // The trigger's reset() disposes the preview *before* invoking commit,
+    // so we always need a fresh local display in addition to broadcasting —
+    // single path through api.ping for every kind.
+    apiBundle?.api.ping(kind, position);
 }
 
 function reinstallTrigger(): void {

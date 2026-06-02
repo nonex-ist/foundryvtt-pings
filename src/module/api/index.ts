@@ -3,7 +3,13 @@ import type { DisplayPingPayload, RemovePingPayload } from '../network/messages.
 import type { SocketHandle } from '../network/socket.js';
 import { createPing, type PingHandle } from '../render/ping.js';
 import type { PingKind, WorldPosition } from '../types.js';
-import { assertColor, assertId, assertPosition, assertPositiveInt } from './validators.js';
+import {
+    assertColor,
+    assertId,
+    assertKind,
+    assertPosition,
+    assertPositiveInt,
+} from './validators.js';
 
 export interface PingOptions {
     color?: number;
@@ -102,6 +108,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
         position: WorldPosition,
         opts: PingOptions | undefined,
     ): DisplayPingPayload | null {
+        assertKind(kind);
         assertPosition(position);
         const color = opts?.color !== undefined ? assertColor(opts.color) : config.senderColorProvider();
         const durationMs =
