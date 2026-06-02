@@ -186,9 +186,20 @@ interface FoundryUI {
 }
 
 declare const game: FoundryGame;
+interface FoundryControlsLayerCtor {
+    prototype: {
+        _onLongPress?: (...args: unknown[]) => unknown;
+    };
+}
+
 declare const foundry: {
     utils: {
         randomID(length?: number): string;
+    };
+    canvas?: {
+        layers?: {
+            ControlsLayer?: FoundryControlsLayerCtor;
+        };
     };
 };
 declare const canvas: FoundryCanvas;

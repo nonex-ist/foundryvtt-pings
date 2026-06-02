@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-06-02
+
+### Fixed
+
+- Foundry v14's built-in long-press canvas ping (`ControlsLayer._onLongPress`,
+  500ms on the token layer) is now suppressed at module init, so it no
+  longer fires alongside our gesture. Symptoms before the fix: pings
+  appeared twice on hold-release and the radial menu felt unresponsive
+  because the native handler consumed the interaction. There is no
+  built-in setting to disable the native ping, so we override the
+  prototype method with a no-op before any `ControlsLayer` instance
+  is constructed.
+
 ## [0.2.0] — 2026-06-02
 
 First release published through the signed CI pipeline. v0.1.0 was

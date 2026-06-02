@@ -6,7 +6,7 @@ A clean-room MIT reimplementation: the gesture vocabulary is inspired
 by [Azzurite's older `pings` module](https://gitlab.com/foundry-azzurite/pings)
 (which targets pre-v14 Foundry and breaks under v14's ApplicationV2 DOM
 layout — that's the bug this module fixes; see
-[Behaviour reference → Sheet pointer-bleed](#sheet-pointer-bleed-the-bug-this-module-fixes)).
+[Behaviour reference → Sheet pointer-bleed](#sheet-pointer-bleed-the-other-bug-this-module-fixes)).
 No upstream code is reused; v14 is the only supported target.
 
 ## Features
@@ -130,7 +130,22 @@ Toggle and volume live in client settings; defaults are **on** at
 **0.5 volume**. Browsers block audio until the user has interacted with
 the page; pre-interaction failures are silently swallowed.
 
-### Sheet pointer-bleed (the bug this module fixes)
+### Native long-press ping suppression
+
+Foundry v14 ships its own built-in long-press canvas ping
+(`ControlsLayer._onLongPress`, 500ms on the token layer). It is
+hardcoded — no setting, hook, or config flag lets you disable it.
+Left alone, the native ping fires alongside this module's gesture
+on every hold-release: you see two pings, and the radial menu
+becomes unreliable because the native interaction can consume the
+release event.
+
+At module init, we override `ControlsLayer.prototype._onLongPress`
+with a no-op so the native handler stops firing. This module's
+gesture (with all of its kinds, settings, and hooks) becomes the
+single canvas-ping system for the user.
+
+### Sheet pointer-bleed (the other bug this module fixes)
 
 Azzurite's `pings` v1.4.3 tracks "is the cursor over the canvas?" via
 mouseenter/mouseleave on `#interface`, plus a window-level `mousedown`

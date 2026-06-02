@@ -15,6 +15,7 @@ import { DEFAULT_PING_COLOR, MODULE_ID } from './constants.js';
 import { parseBinding } from './input/binding.js';
 import { openRadialMenu } from './input/radial-menu.js';
 import { installTrigger } from './input/trigger.js';
+import { suppressNativeLongPress } from './native-ping.js';
 import type { DisplayPingPayload } from './network/messages.js';
 import { createRateLimit } from './network/rate-limit.js';
 import { installSocket, type SocketHandle } from './network/socket.js';
@@ -126,6 +127,10 @@ Hooks.once('init', () => {
         onAudioEnabledChanged: (enabled) => audio?.setEnabled(enabled),
         onAudioVolumeChanged: (volume) => audio?.setVolume(volume),
     });
+    // Override Foundry's native long-press ping so it doesn't fire
+    // alongside ours. Must happen before any ControlsLayer instance is
+    // constructed — init is well before canvasInit.
+    suppressNativeLongPress();
     console.log(`${MODULE_ID} | init`);
 });
 
