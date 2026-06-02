@@ -67,8 +67,30 @@ function showPreviewPing(position: WorldPosition): () => void {
     };
 }
 
-function commitPing(kind: PingKind, position: WorldPosition): void {
-    if (!apiBundle) return;
+function commitPing(
+    kind: PingKind,
+    position: WorldPosition,
+    previewDispose: (() => void) | null,
+): void {
+    if (!apiBundle) {
+        previewDispose?.();
+        return;
+    }
+
+    // "Here" commit from preview state: preview is already on screen with
+    // exactly the same visual the commit would render. Keep it (skip the
+    // disposer) and broadcast-only so peers see their copy. No flicker, no
+    // double-render. Peers' pings start their TTL from broadcast time;
+    // local user's preview lives out its 350ms-shifted TTL — imperceptible.
+    if (kind === 'here' && previewDispose) {
+        apiBundle.api.sendHere(position);
+        return;
+    }
+
+    // Any other path: preview (if any) is being replaced by a different
+    // kind, or was already disposed when the menu opened. Drop preview
+    // and render the chosen kind fresh.
+    previewDispose?.();
 
     if (kind === 'text') {
         const text = window.prompt('Pings — text:');

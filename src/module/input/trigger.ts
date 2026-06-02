@@ -22,11 +22,22 @@ export interface TriggerCallbacks {
 
     /**
      * Commit the gesture. Fired on release in either preview or menu
-     * state; never fired if the gesture was canceled. The preview
-     * disposer (if any) has already been called; the menu controller (if
-     * any) has already been destroyed.
+     * state; never fired if the gesture was canceled. The menu controller
+     * (if any) has already been destroyed.
+     *
+     * `previewDispose` is non-null when a preview ping is still on screen
+     * at commit time (preview-state release). It's null when the menu was
+     * opened (preview was disposed at that transition). The handler owns
+     * the preview from this point: call the disposer to drop it, or skip
+     * it to let the preview live out its natural lifetime — useful when
+     * the commit semantically *is* the preview (e.g. "here" commits from
+     * preview state should keep the visual continuous).
      */
-    commit(kind: PingKind, position: WorldPosition): void;
+    commit(
+        kind: PingKind,
+        position: WorldPosition,
+        previewDispose: (() => void) | null,
+    ): void;
 }
 
 export interface TriggerConfig {
@@ -169,8 +180,18 @@ export function installTrigger(config: TriggerConfig): () => void {
         }
 
         const commitPosition = hold.startWorld;
+        // Hand the preview disposer to the commit callback so it can decide
+        // whether to drop the preview (replacing with a different kind) or
+        // keep it (preview becomes the committed "here" visual). Detach
+        // from `reset()` so the normal teardown doesn't fire it.
+        const previewDispose = hold.previewDispose;
+        hold.previewDispose = null;
         reset();
-        if (commitKind !== null) config.callbacks.commit(commitKind, commitPosition);
+        if (commitKind !== null) {
+            config.callbacks.commit(commitKind, commitPosition, previewDispose);
+        } else if (previewDispose) {
+            previewDispose();
+        }
     };
 
     const onPointerCancel = (ev: PointerEvent): void => {

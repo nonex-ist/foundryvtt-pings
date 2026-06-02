@@ -900,6 +900,25 @@ function installTrigger(config) {
   };
 }
 
+// src/module/native-ping.ts
+var restore = null;
+function suppressNativeLongPress() {
+  if (restore) return;
+  const proto = foundry.canvas?.layers?.ControlsLayer?.prototype;
+  if (!proto || typeof proto._onLongPress !== "function") {
+    console.warn(
+      `${MODULE_ID} | could not locate ControlsLayer._onLongPress \u2014 native long-press ping may still fire`
+    );
+    return;
+  }
+  const original = proto._onLongPress;
+  proto._onLongPress = function noop() {
+  };
+  restore = () => {
+    proto._onLongPress = original;
+  };
+}
+
 // src/module/network/rate-limit.ts
 function createRateLimit(config) {
   const { capacity, windowMs } = config;
@@ -1085,6 +1104,7 @@ Hooks.once("init", () => {
     onAudioEnabledChanged: (enabled) => audio?.setEnabled(enabled),
     onAudioVolumeChanged: (volume) => audio?.setVolume(volume)
   });
+  suppressNativeLongPress();
   console.log(`${MODULE_ID} | init`);
 });
 Hooks.on("canvasReady", () => {

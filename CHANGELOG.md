@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   built-in setting to disable the native ping, so we override the
   prototype method with a no-op before any `ControlsLayer` instance
   is constructed.
+- Preview-to-commit no longer double-renders for the "here" gesture. The
+  trigger now hands the preview disposer to the commit callback, which
+  keeps the preview alive when the commit is semantically the preview
+  ("here" from preview-state release) and broadcasts via `sendHere`
+  instead of re-rendering. Visible result: one continuous ping per
+  gesture instead of a preview-then-flash sequence. Non-here kinds and
+  menu-deadzone "here" still render fresh (preview was already disposed
+  or is being replaced by a different visual).
 
 ## [0.2.0] — 2026-06-02
 
