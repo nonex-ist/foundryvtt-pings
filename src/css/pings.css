@@ -1,5 +1,11 @@
 /* Radial-menu overlay for the hold-and-drag gesture.
  *
+ * All CSS classes / custom properties / animation names / SVG IDs in
+ * this stylesheet are prefixed `nonex-ist-pings-` to match the module
+ * id, eliminating any chance of collision with Azzurite's `pings`
+ * module (which lives under a different module id but shares the
+ * Foundry runtime).
+ *
  * The root is fixed-position at the press location with pointer-events:none
  * so the underlying canvas keeps receiving the pointer events — the trigger
  * is the single source of truth for the gesture. The four ring wedges +
@@ -7,24 +13,26 @@
  * fill is dictated by its `data-kind` attribute so the menu visually mirrors
  * what the resulting ping will look like (rally = gold, alert = red, others
  * tinted with three shades of the local user's color: text uses
- * --pings-user-light, center uses --pings-user-base, token uses
- * --pings-user-dark, all set on the menu root from JS).
+ * --nonex-ist-pings-user-light, center uses --nonex-ist-pings-user-base,
+ * token uses --nonex-ist-pings-user-dark, all set on the menu root from JS).
  *
  * Modes:
- *   .pings-radial-menu--passive  — opens-with default, dim + smaller,
- *                                   reads as "menu is available, drag to
- *                                   select"; no highlight tracking
- *   (default state)              — active mode, full opacity + scale,
- *                                   highlight follows the cursor
- *   .pings-radial-active         — applied to the segment under the
- *                                   cursor (active mode only); bumps
- *                                   stroke + adds a chip-color glow
- *                                   pulse */
+ *   .nonex-ist-pings-radial-menu--passive  — opens-with default, dim +
+ *                                             smaller, reads as "menu is
+ *                                             available, drag to select";
+ *                                             no highlight tracking
+ *   (default state)                        — active mode, full opacity +
+ *                                             scale, highlight follows
+ *                                             the cursor
+ *   .nonex-ist-pings-radial-active         — applied to the segment under
+ *                                             the cursor (active mode
+ *                                             only); bumps stroke + adds
+ *                                             a chip-color glow pulse */
 
-.pings-radial-menu {
-    --pings-user-base: rgba(255, 255, 255, 0.85);
-    --pings-user-light: rgba(255, 255, 255, 0.95);
-    --pings-user-dark: rgba(255, 255, 255, 0.55);
+.nonex-ist-pings-radial-menu {
+    --nonex-ist-pings-user-base: rgba(255, 255, 255, 0.85);
+    --nonex-ist-pings-user-light: rgba(255, 255, 255, 0.95);
+    --nonex-ist-pings-user-dark: rgba(255, 255, 255, 0.55);
     position: fixed;
     top: 0;
     left: 0;
@@ -34,7 +42,7 @@
     z-index: 60;
 }
 
-.pings-radial-svg {
+.nonex-ist-pings-radial-svg {
     position: absolute;
     top: 0;
     left: 0;
@@ -52,18 +60,18 @@
         drop-shadow(0 14px 24px rgba(0, 0, 0, 0.32));
 }
 
-.pings-radial-menu--passive .pings-radial-svg {
+.nonex-ist-pings-radial-menu--passive .nonex-ist-pings-radial-svg {
     opacity: 0.5;
     transform: translate(-50%, -50%) scale(0.88);
 }
 
-.pings-radial-segment {
-    /* --chip-bg is the *solid* color reference for the glow filter on
-     * active state. The actual fill is a radial gradient (defined in the
-     * SVG <defs>) that runs dark at the inner edge to full color at the
-     * outer rim — makes the rim glow read as a highlight against the
-     * dimmer inner surface. */
-    --chip-bg: var(--pings-user-base);
+.nonex-ist-pings-radial-segment {
+    /* --nonex-ist-pings-chip-bg is the *solid* color reference for the
+     * glow filter on active state. The actual fill is a radial gradient
+     * (defined in the SVG <defs>) that runs dark at the inner edge to
+     * full color at the outer rim — makes the rim glow read as a
+     * highlight against the dimmer inner surface. */
+    --nonex-ist-pings-chip-bg: var(--nonex-ist-pings-user-base);
     stroke: rgba(0, 0, 0, 0.32);
     stroke-width: 1.5;
     stroke-linejoin: round;
@@ -72,84 +80,84 @@
         filter 160ms ease-out;
 }
 
-.pings-radial-segment[data-kind="rally"] {
-    --chip-bg: #ffc640;
-    fill: url(#pings-grad-rally);
+.nonex-ist-pings-radial-segment[data-kind="rally"] {
+    --nonex-ist-pings-chip-bg: #ffc640;
+    fill: url(#nonex-ist-pings-grad-rally);
 }
-.pings-radial-segment[data-kind="alert"] {
-    --chip-bg: #ff3333;
-    fill: url(#pings-grad-alert);
+.nonex-ist-pings-radial-segment[data-kind="alert"] {
+    --nonex-ist-pings-chip-bg: #ff3333;
+    fill: url(#nonex-ist-pings-grad-alert);
 }
-.pings-radial-segment[data-kind="text"] {
-    --chip-bg: var(--pings-user-light);
-    fill: url(#pings-grad-text);
+.nonex-ist-pings-radial-segment[data-kind="text"] {
+    --nonex-ist-pings-chip-bg: var(--nonex-ist-pings-user-light);
+    fill: url(#nonex-ist-pings-grad-text);
 }
-.pings-radial-segment[data-kind="token-attach"] {
-    --chip-bg: var(--pings-user-dark);
-    fill: url(#pings-grad-token);
+.nonex-ist-pings-radial-segment[data-kind="token-attach"] {
+    --nonex-ist-pings-chip-bg: var(--nonex-ist-pings-user-dark);
+    fill: url(#nonex-ist-pings-grad-token);
 }
 
 /* Center "Ping" chip stays a solid fill — it's small (28px radius) so a
  * gradient would just look like a dark dot. Solid uses the *base* user
  * color so the three user-colored chips read as a light/base/dark
  * triplet (text/center/token). */
-.pings-radial-center {
-    --chip-bg: var(--pings-user-base);
-    fill: var(--chip-bg);
+.nonex-ist-pings-radial-center {
+    --nonex-ist-pings-chip-bg: var(--nonex-ist-pings-user-base);
+    fill: var(--nonex-ist-pings-chip-bg);
     stroke: rgba(0, 0, 0, 0.45);
     stroke-width: 1.5;
 }
 
-.pings-radial-center-ring,
-.pings-radial-outer-ring {
+.nonex-ist-pings-radial-center-ring,
+.nonex-ist-pings-radial-outer-ring {
     fill: none;
     pointer-events: none;
 }
 
-.pings-radial-center-ring {
+.nonex-ist-pings-radial-center-ring {
     stroke: rgba(255, 255, 255, 0.2);
     stroke-width: 1.5;
 }
 
-.pings-radial-outer-ring {
+.nonex-ist-pings-radial-outer-ring {
     stroke: rgba(255, 255, 255, 0.12);
     stroke-width: 1;
 }
 
 /* Active state: rim brightens, glow pulses gently to feel alive. */
-@keyframes pings-radial-pulse {
+@keyframes nonex-ist-pings-radial-pulse {
     0%, 100% {
-        filter: drop-shadow(0 0 6px var(--chip-bg))
-            drop-shadow(0 0 12px var(--chip-bg));
+        filter: drop-shadow(0 0 6px var(--nonex-ist-pings-chip-bg))
+            drop-shadow(0 0 12px var(--nonex-ist-pings-chip-bg));
     }
     50% {
-        filter: drop-shadow(0 0 10px var(--chip-bg))
-            drop-shadow(0 0 22px var(--chip-bg));
+        filter: drop-shadow(0 0 10px var(--nonex-ist-pings-chip-bg))
+            drop-shadow(0 0 22px var(--nonex-ist-pings-chip-bg));
     }
 }
 
-.pings-radial-segment.pings-radial-active {
+.nonex-ist-pings-radial-segment.nonex-ist-pings-radial-active {
     stroke: rgba(255, 255, 255, 0.95);
     stroke-width: 2.5;
-    animation: pings-radial-pulse 1.6s ease-in-out infinite;
+    animation: nonex-ist-pings-radial-pulse 1.6s ease-in-out infinite;
 }
 
 /* Disabled segment: flat grey fill (overrides the gradient), dim label.
  * Cursor-over it lights the center "Ping" chip instead so the user
  * sees the fallback. */
-.pings-radial-segment.pings-radial-disabled {
-    --chip-bg: #4a4a4a;
+.nonex-ist-pings-radial-segment.nonex-ist-pings-radial-disabled {
+    --nonex-ist-pings-chip-bg: #4a4a4a;
     fill: #4a4a4a;
     opacity: 0.55;
     filter: saturate(0.4);
 }
 
-.pings-radial-label.pings-radial-disabled {
+.nonex-ist-pings-radial-label.nonex-ist-pings-radial-disabled {
     fill: rgba(255, 255, 255, 0.5);
     opacity: 0.75;
 }
 
-.pings-radial-label {
+.nonex-ist-pings-radial-label {
     fill: #ffffff;
     font-family: "Signika", sans-serif;
     font-size: 14px;
@@ -165,7 +173,7 @@
     stroke-linejoin: round;
 }
 
-.pings-radial-center-label {
+.nonex-ist-pings-radial-center-label {
     font-size: 11px;
     letter-spacing: 0.08em;
 }

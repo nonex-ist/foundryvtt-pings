@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-06-02
+
+First stable release.
+
+### Changed
+
+- **BREAKING: Module id renamed from `pings` to `nonex-ist-pings`.**
+  Foundry treated this module and Azzurite's pre-v14 `pings` as the
+  same package because they shared an id, prompting users to "update"
+  from ours to Azzurite's (which then breaks under v14's ApplicationV2
+  DOM). The new id sidesteps the collision entirely. **Existing
+  installs need to be uninstalled and reinstalled** under the new id.
+  The manifest URL is unchanged:
+  `https://github.com/nonex-ist/foundryvtt-pings/releases/latest/download/module.json`
+- API access path changed accordingly:
+  `game.modules.get('nonex-ist-pings').api`. The `window.NonexIst.Pings`
+  global mirror is unchanged.
+- Socket channel is now `module.nonex-ist-pings` (was `module.pings`).
+  v0.x ↔ v1.x clients cannot exchange pings — that's intentional, the
+  whole point of the rename is to cleanly separate the two namespaces.
+- Settings are stored under the new module id namespace, so v0.x
+  settings will not carry over. Players will see defaults on first
+  run after upgrading.
+- **Integration hooks renamed** to track the new module id:
+  - `pings.preDisplay` → `nonex-ist-pings.preDisplay`
+  - `pings.display` → `nonex-ist-pings.display`
+  - `pingsReady` → `nonex-ist-pings.ready`
+
+  Any downstream module that subscribed via the old hook names must
+  update its `Hooks.on(...)` call.
+- **i18n key root renamed** from `pings.*` / `PINGS.*` to
+  `nonex-ist-pings.*` / `NONEX_IST_PINGS.*`. Translators of an
+  unofficial language pack need to update their key paths.
+- **CSS class / variable / SVG ID prefix renamed** from `pings-*` /
+  `--pings-*` to `nonex-ist-pings-*` / `--nonex-ist-pings-*`. No
+  effect unless a downstream module was targeting our DOM via these
+  selectors, in which case its CSS needs the same migration.
+- Scene flag namespace follows the module id, so the scene-disable
+  flag now lives at `flags.nonex-ist-pings.disabled` (was
+  `flags.pings.disabled`).
+
 ## [0.2.1] — 2026-06-02
 
 ### Fixed

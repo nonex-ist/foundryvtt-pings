@@ -1,6 +1,15 @@
+import { MODULE_ID } from '../constants.js';
 import type { PingKind, WorldPosition } from '../types.js';
 
-export const SOCKET_NAME = 'module.pings';
+/**
+ * Foundry socket channel, kept in sync with the module id by
+ * construction. Renaming `MODULE_ID` is therefore *intentionally* a
+ * breaking compatibility change for in-flight clients — they listen on
+ * different channels and can no longer exchange pings — which matches
+ * how Foundry treats a module-id rename in every other namespace
+ * (settings, flags, asset paths, etc.).
+ */
+export const SOCKET_NAME = `module.${MODULE_ID}`;
 
 export interface DisplayPingPayload {
     id: string;

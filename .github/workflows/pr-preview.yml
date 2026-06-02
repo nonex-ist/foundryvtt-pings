@@ -47,18 +47,18 @@ jobs:
         run: |
           set -eu
           mkdir -p build/artifacts
-          cp -r src build/pings
-          (cd build && zip -r artifacts/pings.zip pings/)
-          (cd build/artifacts && sha256sum pings.zip > pings.zip.sha256)
+          cp -r src build/nonex-ist-pings
+          (cd build && zip -r artifacts/nonex-ist-pings.zip nonex-ist-pings/)
+          (cd build/artifacts && sha256sum nonex-ist-pings.zip > nonex-ist-pings.zip.sha256)
 
       - name: Upload preview artifact
         id: upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: pings-pr${{ github.event.pull_request.number }}-${{ github.sha }}
+          name: nonex-ist-pings-pr${{ github.event.pull_request.number }}-${{ github.sha }}
           path: |
-            build/artifacts/pings.zip
-            build/artifacts/pings.zip.sha256
+            build/artifacts/nonex-ist-pings.zip
+            build/artifacts/nonex-ist-pings.zip.sha256
           retention-days: 14
           if-no-files-found: error
 
@@ -73,7 +73,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          ARTIFACT_NAME: pings-pr${{ github.event.pull_request.number }}-${{ github.sha }}
+          ARTIFACT_NAME: nonex-ist-pings-pr${{ github.event.pull_request.number }}-${{ github.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -eu
@@ -93,10 +93,10 @@ jobs:
             echo
             echo "1. **Back up your world** before testing a preview build."
             echo "2. Sign in to GitHub and click the artifact link above to download the artifact zip."
-            echo "3. Unzip it. Inside you'll find \`pings.zip\` and a \`.sha256\` checksum."
+            echo "3. Unzip it. Inside you'll find \`nonex-ist-pings.zip\` and a \`.sha256\` checksum."
             echo "4. Quit Foundry. In your Foundry user data folder, locate \`Data/modules/\`."
-            echo "   - If \`pings\` already exists there, rename or remove it first (this preview will replace it)."
-            echo "5. Extract \`pings.zip\` into \`Data/modules/\` so you end up with \`Data/modules/pings/module.json\`."
+            echo "   - If \`nonex-ist-pings\` already exists there, rename or remove it first (this preview will replace it)."
+            echo "5. Extract \`nonex-ist-pings.zip\` into \`Data/modules/\` so you end up with \`Data/modules/nonex-ist-pings/module.json\`."
             echo "6. Start Foundry. The module should appear as **Pings** with the preview version stamped above."
             echo
             echo "> Foundry's *Install Module → Manifest URL* flow does **not** work for PR previews — artifacts require a logged-in download, so manual extraction is the only path. Stable installs will continue to use the manifest URL from tagged releases."

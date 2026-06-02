@@ -18,10 +18,10 @@ export const RADIAL_SEGMENTS: ReadonlyArray<{
     i18n: string;
     fallback: string;
 }> = [
-    { kind: 'rally', angleCenter: -Math.PI / 2, i18n: 'pings.radial.rally', fallback: 'Rally' },
-    { kind: 'alert', angleCenter: 0, i18n: 'pings.radial.alert', fallback: 'Alert' },
-    { kind: 'text', angleCenter: Math.PI / 2, i18n: 'pings.radial.text', fallback: 'Text' },
-    { kind: 'token-attach', angleCenter: Math.PI, i18n: 'pings.radial.token', fallback: 'Token' },
+    { kind: 'rally', angleCenter: -Math.PI / 2, i18n: 'nonex-ist-pings.radial.rally', fallback: 'Rally' },
+    { kind: 'alert', angleCenter: 0, i18n: 'nonex-ist-pings.radial.alert', fallback: 'Alert' },
+    { kind: 'text', angleCenter: Math.PI / 2, i18n: 'nonex-ist-pings.radial.text', fallback: 'Text' },
+    { kind: 'token-attach', angleCenter: Math.PI, i18n: 'nonex-ist-pings.radial.token', fallback: 'Token' },
 ];
 
 function tr(key: string, fallback: string): string {
@@ -200,7 +200,7 @@ function arcPath(
  */
 export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     const root = document.createElement('div');
-    root.className = 'pings-radial-menu pings-radial-menu--passive';
+    root.className = 'nonex-ist-pings-radial-menu nonex-ist-pings-radial-menu--passive';
     root.style.left = `${opts.clientX}px`;
     root.style.top = `${opts.clientY}px`;
     // Derive three shades of the user color so the three user-colored
@@ -210,14 +210,14 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     const userBase = opts.userColor;
     const userLight = lighten(opts.userColor, 0.4);
     const userDark = darken(opts.userColor, 0.55);
-    root.style.setProperty('--pings-user-base', colorToHex(userBase));
-    root.style.setProperty('--pings-user-light', colorToHex(userLight));
-    root.style.setProperty('--pings-user-dark', colorToHex(userDark));
+    root.style.setProperty('--nonex-ist-pings-user-base', colorToHex(userBase));
+    root.style.setProperty('--nonex-ist-pings-user-light', colorToHex(userLight));
+    root.style.setProperty('--nonex-ist-pings-user-dark', colorToHex(userDark));
 
     const disabledKinds = new Set<PingKind>(opts.disabledKinds ?? []);
 
     const svg = document.createElementNS(SVG_NS, 'svg');
-    svg.setAttribute('class', 'pings-radial-svg');
+    svg.setAttribute('class', 'nonex-ist-pings-radial-svg');
     svg.setAttribute('width', `${SVG_SIZE_PX}`);
     svg.setAttribute('height', `${SVG_SIZE_PX}`);
     svg.setAttribute(
@@ -232,10 +232,10 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     // their fixed colors; the user-colored gradient is built from
     // `opts.userColor` so it tracks the player.
     const defs = document.createElementNS(SVG_NS, 'defs');
-    defs.appendChild(buildRadialGradient('pings-grad-rally', 0xffc640));
-    defs.appendChild(buildRadialGradient('pings-grad-alert', 0xff3333));
-    defs.appendChild(buildRadialGradient('pings-grad-text', userLight));
-    defs.appendChild(buildRadialGradient('pings-grad-token', userDark));
+    defs.appendChild(buildRadialGradient('nonex-ist-pings-grad-rally', 0xffc640));
+    defs.appendChild(buildRadialGradient('nonex-ist-pings-grad-alert', 0xff3333));
+    defs.appendChild(buildRadialGradient('nonex-ist-pings-grad-text', userLight));
+    defs.appendChild(buildRadialGradient('nonex-ist-pings-grad-token', userDark));
     svg.appendChild(defs);
 
     const segments = new Map<PingKind, SVGElement>();
@@ -244,8 +244,8 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     // and the labels can sit on top of everything).
     for (const seg of RADIAL_SEGMENTS) {
         const path = document.createElementNS(SVG_NS, 'path');
-        let className = 'pings-radial-segment';
-        if (disabledKinds.has(seg.kind)) className += ' pings-radial-disabled';
+        let className = 'nonex-ist-pings-radial-segment';
+        if (disabledKinds.has(seg.kind)) className += ' nonex-ist-pings-radial-disabled';
         path.setAttribute('class', className);
         path.dataset.kind = seg.kind;
         const half = Math.PI / 4;
@@ -264,7 +264,7 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
 
     // Center circle ("Ping" / here-default).
     const center = document.createElementNS(SVG_NS, 'circle');
-    center.setAttribute('class', 'pings-radial-segment pings-radial-center');
+    center.setAttribute('class', 'nonex-ist-pings-radial-segment nonex-ist-pings-radial-center');
     center.dataset.kind = 'here';
     center.setAttribute('cx', '0');
     center.setAttribute('cy', '0');
@@ -275,7 +275,7 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     // Thin decorative ring just outside the center chip — visually
     // separates the deadzone from the wedge ring without competing.
     const centerRing = document.createElementNS(SVG_NS, 'circle');
-    centerRing.setAttribute('class', 'pings-radial-center-ring');
+    centerRing.setAttribute('class', 'nonex-ist-pings-radial-center-ring');
     centerRing.setAttribute('cx', '0');
     centerRing.setAttribute('cy', '0');
     centerRing.setAttribute('r', `${CENTER_RADIUS_PX + 3.5}`);
@@ -283,7 +283,7 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
 
     // Outer hairline ring polishes the ring's silhouette.
     const outerRing = document.createElementNS(SVG_NS, 'circle');
-    outerRing.setAttribute('class', 'pings-radial-outer-ring');
+    outerRing.setAttribute('class', 'nonex-ist-pings-radial-outer-ring');
     outerRing.setAttribute('cx', '0');
     outerRing.setAttribute('cy', '0');
     outerRing.setAttribute('r', `${OUTER_RADIUS_PX + 0.5}`);
@@ -292,8 +292,8 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     // Labels go last so they're not clipped by sibling fills.
     for (const seg of RADIAL_SEGMENTS) {
         const label = document.createElementNS(SVG_NS, 'text');
-        let labelClass = 'pings-radial-label';
-        if (disabledKinds.has(seg.kind)) labelClass += ' pings-radial-disabled';
+        let labelClass = 'nonex-ist-pings-radial-label';
+        if (disabledKinds.has(seg.kind)) labelClass += ' nonex-ist-pings-radial-disabled';
         label.setAttribute('class', labelClass);
         label.setAttribute('x', `${LABEL_RADIUS_PX * Math.cos(seg.angleCenter)}`);
         label.setAttribute('y', `${LABEL_RADIUS_PX * Math.sin(seg.angleCenter)}`);
@@ -303,12 +303,12 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
         svg.appendChild(label);
     }
     const centerLabel = document.createElementNS(SVG_NS, 'text');
-    centerLabel.setAttribute('class', 'pings-radial-label pings-radial-center-label');
+    centerLabel.setAttribute('class', 'nonex-ist-pings-radial-label nonex-ist-pings-radial-center-label');
     centerLabel.setAttribute('x', '0');
     centerLabel.setAttribute('y', '0');
     centerLabel.setAttribute('text-anchor', 'middle');
     centerLabel.setAttribute('dominant-baseline', 'middle');
-    centerLabel.textContent = tr('pings.radial.ping', 'Ping');
+    centerLabel.textContent = tr('nonex-ist-pings.radial.ping', 'Ping');
     svg.appendChild(centerLabel);
 
     document.body.appendChild(root);
@@ -319,7 +319,7 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     const clearHighlight = (): void => {
         if (currentHighlight !== null) {
             const el = segments.get(currentHighlight);
-            if (el) el.classList.remove('pings-radial-active');
+            if (el) el.classList.remove('nonex-ist-pings-radial-active');
             currentHighlight = null;
         }
     };
@@ -332,7 +332,7 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
         if (currentHighlight === effective) return;
         clearHighlight();
         const el = segments.get(effective);
-        if (el) el.classList.add('pings-radial-active');
+        if (el) el.classList.add('nonex-ist-pings-radial-active');
         currentHighlight = effective;
     };
 
@@ -341,9 +341,9 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
             if (active === value) return;
             active = value;
             if (active) {
-                root.classList.remove('pings-radial-menu--passive');
+                root.classList.remove('nonex-ist-pings-radial-menu--passive');
             } else {
-                root.classList.add('pings-radial-menu--passive');
+                root.classList.add('nonex-ist-pings-radial-menu--passive');
                 clearHighlight();
             }
         },

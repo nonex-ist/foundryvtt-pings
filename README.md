@@ -23,11 +23,11 @@ No upstream code is reused; v14 is the only supported target.
   inside sheets no longer leak into a phantom ping
 - **Networking** with per-sender rate limiting (3/5s, GM-exempt), scene
   filtering, and a defensive parser against malformed peer payloads
-- **Public API** at `game.modules.get('pings').api`: `here / showHere /
+- **Public API** at `game.modules.get('nonex-ist-pings').api`: `here / showHere /
   sendHere` plus generic `ping / showPing / sendPing(kind, position, opts)`
   and `remove`
-- **Integration hooks**: `pings.preDisplay(payload)` (cancelable) and
-  `pings.display(handle, payload)` for systems and modules to intercept
+- **Integration hooks**: `nonex-ist-pings.preDisplay(payload)` (cancelable) and
+  `nonex-ist-pings.display(handle, payload)` for systems and modules to intercept
 - **Per-scene disable** via API or scene flag for cutscenes
 - **Zero runtime dependencies** — no lib-wrapper, no settings-extender
 
@@ -112,12 +112,12 @@ Players on different scenes never see each other's pings.
 A GM can suppress pings for the current scene:
 
 ```js
-game.modules.get('pings').api.setSceneDisabled(true);   // suppress
-game.modules.get('pings').api.setSceneDisabled(false);  // re-enable
-game.modules.get('pings').api.isSceneDisabled();        // → boolean
+game.modules.get('nonex-ist-pings').api.setSceneDisabled(true);   // suppress
+game.modules.get('nonex-ist-pings').api.setSceneDisabled(false);  // re-enable
+game.modules.get('nonex-ist-pings').api.isSceneDisabled();        // → boolean
 ```
 
-Writes the scene flag `flags.pings.disabled`. While true, **both** local
+Writes the scene flag `flags.nonex-ist-pings.disabled`. While true, **both** local
 trigger commits and inbound peer pings are silently dropped on that
 scene. Switching to a scene without the flag resumes normal behaviour.
 
@@ -125,7 +125,7 @@ scene. Switching to a scene without the flag resumes normal behaviour.
 
 A short ogg plays whenever a ping is displayed locally — fires for both
 your own pings and pings received from peers. Wired via the
-`pings.display` hook, so any third-party listener can also react.
+`nonex-ist-pings.display` hook, so any third-party listener can also react.
 Toggle and volume live in client settings; defaults are **on** at
 **0.5 volume**. Browsers block audio until the user has interacted with
 the page; pre-interaction failures are silently swallowed.
@@ -198,7 +198,7 @@ Trigger binding parser accepts case-insensitive tokens separated by
 ## Integration
 
 ```js
-const api = game.modules.get('pings').api;
+const api = game.modules.get('nonex-ist-pings').api;
 
 // Trigger pings (returns the ping id, or null if rate-limited / canceled):
 api.here({ x: 1000, y: 1000 });                            // here, default
@@ -222,15 +222,15 @@ api.remove(id, { broadcast: false });  // local only
 //   tokenId: required for kind 'token-attach'
 
 // Suppress pings (e.g. during a cutscene):
-Hooks.on('pings.preDisplay', (payload) => myCutsceneActive ? false : true);
+Hooks.on('nonex-ist-pings.preDisplay', (payload) => myCutsceneActive ? false : true);
 
 // React to every displayed ping (local + inbound):
-Hooks.on('pings.display', (handle, payload) => {
+Hooks.on('nonex-ist-pings.display', (handle, payload) => {
     console.log('Ping displayed', payload.kind, payload.senderId);
 });
 
 // Discover when the API is ready (fires once at game ready):
-Hooks.on('pingsReady', (api) => { /* ... */ });
+Hooks.on('nonex-ist-pings.ready', (api) => { /* ... */ });
 ```
 
 ### Payload shape
@@ -252,9 +252,9 @@ type DisplayPingPayload = {
 };
 ```
 
-`pings.preDisplay` is **cancelable** — return `false` from any handler
+`nonex-ist-pings.preDisplay` is **cancelable** — return `false` from any handler
 to drop the ping entirely (no local render, no broadcast for
-locally-initiated; no local render for inbound). `pings.display` is
+locally-initiated; no local render for inbound). `nonex-ist-pings.display` is
 fire-and-forget.
 
 ## Development
