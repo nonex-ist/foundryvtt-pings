@@ -1,10 +1,13 @@
 # Pings — Foundry VTT module
 
-Click-and-hold map pings for Foundry VTT v14.
+Click-and-hold map pings, built **for Foundry VTT v14**.
 
-A clean-room MIT reimplementation inspired by
-[Azzurite's pings module](https://gitlab.com/foundry-azzurite/pings) for
-older Foundry versions. No upstream code is included.
+A clean-room MIT reimplementation: the gesture vocabulary is inspired
+by [Azzurite's older `pings` module](https://gitlab.com/foundry-azzurite/pings)
+(which targets pre-v14 Foundry and breaks under v14's ApplicationV2 DOM
+layout — that's the bug this module fixes; see
+[Behaviour reference → Sheet pointer-bleed](#sheet-pointer-bleed-the-bug-this-module-fixes)).
+No upstream code is reused; v14 is the only supported target.
 
 ## Features
 

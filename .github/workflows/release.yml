@@ -1,0 +1,157 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "rc-[0-9]+.[0-9]+.[0-9]+"
+      - "alpha-[0-9]+.[0-9]+.[0-9]+"
+      - "beta-[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write     # create release, upload assets
+  id-token: write     # cosign keyless signing
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: pnpm/action-setup@903f9c1a6ebcba6cf41d87230be49611ac97822e # v6
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Compute release metadata
+        id: meta
+        run: |
+          set -eu
+          TAG="${GITHUB_REF#refs/tags/}"
+          # Strip the `v` or `<prefix>-` from tag to get the bare version.
+          case "$TAG" in
+            v*)         VERSION="${TAG#v}" ;;
+            *-*)        VERSION="${TAG#*-}" ;;
+          esac
+          REL="https://github.com/${GITHUB_REPOSITORY}/releases"
+          MANIFEST="${REL}/latest/download/module.json"
+          DOWNLOAD="${REL}/download/${TAG}/pings.zip"
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "manifest=$MANIFEST"
+            echo "download=$DOWNLOAD"
+            # Tags starting with `v` are stable releases; everything else
+            # (rc-/alpha-/beta-) is a prerelease and must not become "latest".
+            if [ "${TAG#v}" != "$TAG" ]; then
+              echo "prerelease=false"
+            else
+              echo "prerelease=true"
+            fi
+          } >> "$GITHUB_OUTPUT"
+          sed -i "s|\"version\":.*|\"version\": \"${VERSION}\",|" src/module.json
+          sed -i "s|\"manifest\":.*|\"manifest\": \"${MANIFEST}\",|" src/module.json
+          sed -i "s|\"download\":.*|\"download\": \"${DOWNLOAD}\",|" src/module.json
+
+      - run: pnpm run build
+
+      - name: Package zip
+        run: |
+          set -eu
+          mkdir -p build/artifacts
+          cp -r src build/pings
+          (cd build && zip -r artifacts/pings.zip pings/)
+          (cd build/artifacts && sha256sum pings.zip > pings.zip.sha256)
+
+      - name: Generate CycloneDX SBOM
+        # Use `pnpm dlx` so we don't carry cdxgen as a devDep just for this
+        # once-per-release step. Pinned to the major track OD6S has verified
+        # against; bump deliberately when their devDep moves.
+        run: >
+          pnpm dlx @cyclonedx/cdxgen@12
+          --type pnpm
+          --no-recurse
+          --spec-version 1.6
+          --output build/artifacts/sbom.cdx.json
+          .
+
+      - name: Extract CHANGELOG section
+        id: changelog
+        run: |
+          set -eu
+          VERSION="${{ steps.meta.outputs.version }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+          # Pull the section bounded by `## [VERSION]` and the next `## [`,
+          # then reflow paragraphs and list items so hard wraps in the
+          # source CHANGELOG don't render as visible <br>s in release
+          # notes (GitHub Releases honor GFM `breaks: true`).
+          # Reflow rules:
+          #   - blank lines and headers (`#`) flush + pass through
+          #   - any line whose first non-space char is `-` or `*` is a
+          #     list item (possibly indented for nested bullets); leading
+          #     whitespace preserved so markdown keeps the nesting
+          #   - any other non-empty line appends to the current buffer,
+          #     joined with a single space (leading indent stripped)
+          # If the version isn't found (e.g. someone tagged without
+          # updating CHANGELOG), fall back to a bare link.
+          # `index($0, header) == 1` is a literal-substring check — avoids
+          # treating the dots in `VERSION` as regex metacharacters.
+          SECTION=$(awk -v header="## [$VERSION]" '
+            BEGIN              { capture=0; buf="" }
+            function flush()   { if (buf != "") { print buf; buf="" } }
+            index($0, header) == 1 { capture=1; next }
+            capture && /^## \[/    { flush(); exit }
+            !capture           { next }
+            /^$/               { flush(); print ""; next }
+            /^#+ /             { flush(); print; next }
+            /^[ \t]*[-*] /     { flush(); buf=$0; next }
+                               { line=$0; sub(/^[ \t]+/, "", line);
+                                 buf = (buf == "" ? line : buf " " line) }
+            END                { flush() }
+          ' CHANGELOG.md)
+          CHANGELOG_URL="https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md"
+          {
+            if [ -n "$SECTION" ]; then
+              printf '%s\n' "$SECTION"
+              echo
+              echo "[Full changelog →](${CHANGELOG_URL})"
+            else
+              echo "[Release notes in CHANGELOG.md →](${CHANGELOG_URL})"
+            fi
+          } > release-body.md
+          echo "body_path=release-body.md" >> "$GITHUB_OUTPUT"
+
+      - uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
+
+      - name: Sign artifacts (cosign keyless)
+        env:
+          COSIGN_YES: "true"
+        run: |
+          set -eu
+          cd build/artifacts
+          cosign sign-blob --bundle pings.zip.bundle           pings.zip
+          cosign sign-blob --bundle sbom.cdx.json.bundle       sbom.cdx.json
+          cd "$GITHUB_WORKSPACE"
+          cosign sign-blob --bundle src/module.json.bundle     src/module.json
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          # `body_path` is prepended; `generate_release_notes: true`
+          # then appends GitHub's auto-generated "What's Changed" PR list.
+          body_path: ${{ steps.changelog.outputs.body_path }}
+          generate_release_notes: true
+          files: |
+            build/artifacts/pings.zip
+            build/artifacts/pings.zip.sha256
+            build/artifacts/pings.zip.bundle
+            build/artifacts/sbom.cdx.json
+            build/artifacts/sbom.cdx.json.bundle
+            src/module.json
+            src/module.json.bundle

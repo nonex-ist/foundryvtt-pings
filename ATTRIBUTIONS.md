@@ -25,6 +25,7 @@ and update this file.
 ## Inspiration
 
 The user-facing concept (click-and-hold map pings) is inspired by
-[Azzurite's `pings` module](https://gitlab.com/foundry-azzurite/pings)
-for older Foundry versions. This is a clean-room reimplementation — no
-upstream code is reused.
+[Azzurite's `pings` module](https://gitlab.com/foundry-azzurite/pings),
+which targets pre-v14 Foundry. This module is built for Foundry v14
+specifically and is a clean-room reimplementation — no upstream code
+is reused.
