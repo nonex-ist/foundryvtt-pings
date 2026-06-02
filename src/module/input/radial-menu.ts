@@ -201,6 +201,23 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     svg.appendChild(center);
     segments.set('here', center);
 
+    // Thin decorative ring just outside the center chip — visually
+    // separates the deadzone from the wedge ring without competing.
+    const centerRing = document.createElementNS(SVG_NS, 'circle');
+    centerRing.setAttribute('class', 'pings-radial-center-ring');
+    centerRing.setAttribute('cx', '0');
+    centerRing.setAttribute('cy', '0');
+    centerRing.setAttribute('r', `${CENTER_RADIUS_PX + 3.5}`);
+    svg.appendChild(centerRing);
+
+    // Outer hairline ring polishes the ring's silhouette.
+    const outerRing = document.createElementNS(SVG_NS, 'circle');
+    outerRing.setAttribute('class', 'pings-radial-outer-ring');
+    outerRing.setAttribute('cx', '0');
+    outerRing.setAttribute('cy', '0');
+    outerRing.setAttribute('r', `${OUTER_RADIUS_PX + 0.5}`);
+    svg.appendChild(outerRing);
+
     // Labels go last so they're not clipped by sibling fills.
     for (const seg of RADIAL_SEGMENTS) {
         const label = document.createElementNS(SVG_NS, 'text');

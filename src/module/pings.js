@@ -896,6 +896,18 @@ function openRadialMenu(opts) {
   center.setAttribute("r", `${CENTER_RADIUS_PX}`);
   svg.appendChild(center);
   segments.set("here", center);
+  const centerRing = document.createElementNS(SVG_NS, "circle");
+  centerRing.setAttribute("class", "pings-radial-center-ring");
+  centerRing.setAttribute("cx", "0");
+  centerRing.setAttribute("cy", "0");
+  centerRing.setAttribute("r", `${CENTER_RADIUS_PX + 3.5}`);
+  svg.appendChild(centerRing);
+  const outerRing = document.createElementNS(SVG_NS, "circle");
+  outerRing.setAttribute("class", "pings-radial-outer-ring");
+  outerRing.setAttribute("cx", "0");
+  outerRing.setAttribute("cy", "0");
+  outerRing.setAttribute("r", `${OUTER_RADIUS_PX + 0.5}`);
+  svg.appendChild(outerRing);
   for (const seg of RADIAL_SEGMENTS) {
     const label = document.createElementNS(SVG_NS, "text");
     let labelClass = "pings-radial-label";
