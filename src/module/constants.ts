@@ -7,3 +7,6 @@ export const FADE_IN_MS = 500;
 export const FADE_OUT_MS = 500;
 export const DEFAULT_PING_DURATION_MS = 6000;
 export const DEFAULT_PING_COLOR = 0xaaaaaa;
+
+export const RATE_LIMIT_CAPACITY = 3;
+export const RATE_LIMIT_WINDOW_MS = 5000;

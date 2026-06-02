@@ -62,12 +62,17 @@ interface FoundryCanvasDimensions {
     size: number;
 }
 
+interface FoundryScene {
+    id: string;
+}
+
 interface FoundryCanvas {
     ready: boolean;
     app: PixiAppLike;
     stage: PixiStageLike;
     controls: FoundryControlsLayer;
     dimensions: FoundryCanvasDimensions;
+    scene: FoundryScene | null;
 }
 
 declare const PIXI: {
@@ -85,12 +90,27 @@ interface FoundryGameModule {
     version?: string;
 }
 
+type FoundrySocketHandler = (data: unknown) => void;
+
+interface FoundrySocket {
+    emit(event: string, data: unknown): void;
+    on(event: string, handler: FoundrySocketHandler): void;
+    off(event: string, handler: FoundrySocketHandler): void;
+}
+
 interface FoundryGame {
     user?: FoundryUser;
+    users?: { get(id: string): FoundryUser | undefined };
     modules?: { get(id: string): FoundryGameModule | undefined };
+    socket?: FoundrySocket;
 }
 
 declare const game: FoundryGame;
+declare const foundry: {
+    utils: {
+        randomID(length?: number): string;
+    };
+};
 declare const canvas: FoundryCanvas;
 declare const ui: unknown;
 declare const CONFIG: unknown;
