@@ -85,6 +85,7 @@ function showPreviewBundle(
         clientX: clientPosition.x,
         clientY: clientPosition.y,
         deadzonePx: getMenuSummonPx(),
+        userColor: resolveUserColor(),
     });
     return {
         previewDispose: () => handle.destroy(),
@@ -93,22 +94,28 @@ function showPreviewBundle(
 }
 
 async function promptForTextPing(position: WorldPosition): Promise<void> {
+    const localize = (key: string, fallback: string): string =>
+        game.i18n?.localize(key) ?? fallback;
+
     const dialog = foundry.applications?.api?.DialogV2;
     if (!dialog) {
         // Fallback for environments without DialogV2 — shouldn't happen on
         // v14, but the graceful degradation keeps text-pings working if
         // Foundry ever moves the dialog API again.
-        const text = window.prompt('Pings — text:');
+        const text = window.prompt(localize('pings.dialog.textPrompt', 'Ping text:'));
         if (text) apiBundle?.api.ping('text', position, { text });
         return;
     }
+    const title = localize('pings.dialog.textTitle', 'Pings — text');
+    const label = localize('pings.dialog.textLabel', 'Text');
+    const confirm = localize('pings.dialog.textConfirm', 'Ping');
     const result = (await dialog.input({
-        window: { title: 'Pings — text' },
+        window: { title },
         content:
-            '<div class="form-group"><label>Text</label>' +
+            `<div class="form-group"><label>${label}</label>` +
             '<input type="text" name="text" autofocus required maxlength="200" />' +
             '</div>',
-        ok: { label: 'Ping', icon: 'fa-solid fa-location-crosshairs' },
+        ok: { label: confirm, icon: 'fa-solid fa-location-crosshairs' },
     })) as { text?: string } | null;
 
     const text = result?.text?.trim();
@@ -154,7 +161,10 @@ function commitPing(
     if (kind === 'token-attach') {
         const tokenId = findTokenIdAt(position);
         if (!tokenId) {
-            ui?.notifications?.warn('Pings: no token under the cursor.');
+            ui?.notifications?.warn(
+                game.i18n?.localize('pings.notifications.noTokenUnderCursor') ??
+                    'Pings: no token under the cursor.',
+            );
             return;
         }
         apiBundle.api.ping('token-attach', position, { tokenId });

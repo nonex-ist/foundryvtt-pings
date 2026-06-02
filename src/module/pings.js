@@ -517,6 +517,14 @@ function warnUser(message) {
     console.warn(`${MODULE_ID} | ${message}`);
   }
 }
+function i18n(key, fallback, data) {
+  const localized = game.i18n?.localize(key, data);
+  if (!localized || localized === key) {
+    if (!data) return fallback;
+    return fallback.replace(/\{(\w+)\}/g, (_, k) => String(data[k] ?? ""));
+  }
+  return localized;
+}
 function isCurrentSceneDisabled() {
   return canvas.scene?.getFlag(MODULE_ID, SCENE_FLAG_DISABLED) === true;
 }
@@ -539,7 +547,11 @@ function createApi(config) {
     if (!moves) return void 0;
     if (!attachedTokens.has(tokenDoc.id)) return void 0;
     ui.notifications?.warn(
-      `Pings: ${tokenDoc.name ?? "token"} is marked \u2014 movement blocked until the marker fades.`
+      i18n(
+        "pings.notifications.tokenMovementBlocked",
+        "Pings: {name} is marked \u2014 movement blocked until the marker fades.",
+        { name: tokenDoc.name ?? "token" }
+      )
     );
     return false;
   });
@@ -637,7 +649,12 @@ function createApi(config) {
   }
   function checkSenderRole(kind) {
     if (kind === "alert" && config.userRoleProvider() < getMinAlertRole()) {
-      warnUser("Alert pings require Assistant role or higher.");
+      warnUser(
+        i18n(
+          "pings.notifications.alertRoleRequired",
+          "Alert pings require Assistant role or higher."
+        )
+      );
       return false;
     }
     return true;
@@ -796,11 +813,18 @@ function eventMatches(event, spec) {
 
 // src/module/input/radial-menu.ts
 var RADIAL_SEGMENTS = [
-  { kind: "rally", angleCenter: -Math.PI / 2, label: "Rally" },
-  { kind: "alert", angleCenter: 0, label: "Alert" },
-  { kind: "text", angleCenter: Math.PI / 2, label: "Text" },
-  { kind: "token-attach", angleCenter: Math.PI, label: "Token" }
+  { kind: "rally", angleCenter: -Math.PI / 2, i18n: "pings.radial.rally", fallback: "Rally" },
+  { kind: "alert", angleCenter: 0, i18n: "pings.radial.alert", fallback: "Alert" },
+  { kind: "text", angleCenter: Math.PI / 2, i18n: "pings.radial.text", fallback: "Text" },
+  { kind: "token-attach", angleCenter: Math.PI, i18n: "pings.radial.token", fallback: "Token" }
 ];
+function tr(key, fallback) {
+  const out = game.i18n?.localize(key);
+  return out && out !== key ? out : fallback;
+}
+function colorToHex(value) {
+  return `#${Math.max(0, Math.min(16777215, value)).toString(16).padStart(6, "0")}`;
+}
 function pickKindFromDelta(deltaX, deltaY, deadzonePx) {
   const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
   if (dist < deadzonePx) return "here";
@@ -816,15 +840,18 @@ function openRadialMenu(opts) {
   root.className = "pings-radial-menu pings-radial-menu--passive";
   root.style.left = `${opts.clientX}px`;
   root.style.top = `${opts.clientY}px`;
+  root.style.setProperty("--pings-user-color", colorToHex(opts.userColor));
   const center = document.createElement("div");
   center.className = "pings-radial-segment pings-radial-center";
-  center.textContent = "Ping";
+  center.dataset.kind = "here";
+  center.textContent = tr("pings.radial.ping", "Ping");
   root.appendChild(center);
   const segments = /* @__PURE__ */ new Map([["here", center]]);
   for (const seg of RADIAL_SEGMENTS) {
     const el = document.createElement("div");
     el.className = "pings-radial-segment";
-    el.textContent = seg.label;
+    el.dataset.kind = seg.kind;
+    el.textContent = tr(seg.i18n, seg.fallback);
     const offsetX = Math.cos(seg.angleCenter) * SEGMENT_RADIUS_PX;
     const offsetY = Math.sin(seg.angleCenter) * SEGMENT_RADIUS_PX;
     el.style.setProperty("--pings-tx", `${offsetX}px`);
@@ -1146,7 +1173,8 @@ function showPreviewBundle(worldPosition, clientPosition) {
   const menu = openRadialMenu({
     clientX: clientPosition.x,
     clientY: clientPosition.y,
-    deadzonePx: getMenuSummonPx()
+    deadzonePx: getMenuSummonPx(),
+    userColor: resolveUserColor()
   });
   return {
     previewDispose: () => handle.destroy(),
@@ -1154,16 +1182,20 @@ function showPreviewBundle(worldPosition, clientPosition) {
   };
 }
 async function promptForTextPing(position) {
+  const localize = (key, fallback) => game.i18n?.localize(key) ?? fallback;
   const dialog = foundry.applications?.api?.DialogV2;
   if (!dialog) {
-    const text2 = window.prompt("Pings \u2014 text:");
+    const text2 = window.prompt(localize("pings.dialog.textPrompt", "Ping text:"));
     if (text2) apiBundle?.api.ping("text", position, { text: text2 });
     return;
   }
+  const title = localize("pings.dialog.textTitle", "Pings \u2014 text");
+  const label = localize("pings.dialog.textLabel", "Text");
+  const confirm = localize("pings.dialog.textConfirm", "Ping");
   const result = await dialog.input({
-    window: { title: "Pings \u2014 text" },
-    content: '<div class="form-group"><label>Text</label><input type="text" name="text" autofocus required maxlength="200" /></div>',
-    ok: { label: "Ping", icon: "fa-solid fa-location-crosshairs" }
+    window: { title },
+    content: `<div class="form-group"><label>${label}</label><input type="text" name="text" autofocus required maxlength="200" /></div>`,
+    ok: { label: confirm, icon: "fa-solid fa-location-crosshairs" }
   });
   const text = result?.text?.trim();
   if (!text) return;
@@ -1187,7 +1219,9 @@ function commitPing(kind, position, previewDispose) {
   if (kind === "token-attach") {
     const tokenId = findTokenIdAt(position);
     if (!tokenId) {
-      ui?.notifications?.warn("Pings: no token under the cursor.");
+      ui?.notifications?.warn(
+        game.i18n?.localize("pings.notifications.noTokenUnderCursor") ?? "Pings: no token under the cursor."
+      );
       return;
     }
     apiBundle.api.ping("token-attach", position, { tokenId });

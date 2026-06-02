@@ -42,6 +42,24 @@
         "name": "Ping sound volume",
         "hint": "0 = muted, 1 = full volume. Default: 0.5."
       }
+    },
+    "radial": {
+      "ping": "Ping",
+      "rally": "Rally",
+      "alert": "Alert",
+      "text": "Text",
+      "token": "Token"
+    },
+    "dialog": {
+      "textTitle": "Pings — text",
+      "textLabel": "Text",
+      "textConfirm": "Ping",
+      "textPrompt": "Ping text:"
+    },
+    "notifications": {
+      "alertRoleRequired": "Alert pings require Assistant role or higher.",
+      "noTokenUnderCursor": "Pings: no token under the cursor.",
+      "tokenMovementBlocked": "Pings: {name} is marked — movement blocked until the marker fades."
     }
   }
 }

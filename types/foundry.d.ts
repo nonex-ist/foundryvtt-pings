@@ -185,7 +185,15 @@ interface FoundryGame {
     modules?: { get(id: string): FoundryGameModule | undefined };
     socket?: FoundrySocket;
     settings?: FoundrySettings;
-    i18n?: { localize(key: string): string };
+    i18n?: {
+        /**
+         * Look up a translation by key, optionally interpolating `{name}`-
+         * style placeholders from `data`. Returns the key itself if no
+         * translation is found, so calls are safe in worlds whose lang
+         * file doesn't ship our strings yet.
+         */
+        localize(key: string, data?: Record<string, unknown>): string;
+    };
 }
 
 interface FoundryNotifications {

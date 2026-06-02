@@ -2,25 +2,37 @@ import type { PingKind } from '../types.js';
 
 /**
  * Cardinal layout. Each entry has the angle (radians, screen space — 0 is
- * right, π/2 is down) the segment's *center* points to, plus a label.
+ * right, π/2 is down) the segment's *center* points to, plus the i18n
+ * key for the label (with an English fallback baked in).
  * Layout (memorize once, never confuse again):
  *
  *   ┌──────────┐
  *   │   Rally  │   12 o'clock — gather-here is up
- *   │Tk  Here  Al   9 — token-attach    3 — alert (urgent right)
+ *   │Tk  Ping  Al   9 — token-attach    3 — alert (urgent right)
  *   │   Text   │   6 — text anchors the bottom
  *   └──────────┘
  */
 export const RADIAL_SEGMENTS: ReadonlyArray<{
     kind: Exclude<PingKind, 'here'>;
     angleCenter: number;
-    label: string;
+    i18n: string;
+    fallback: string;
 }> = [
-    { kind: 'rally', angleCenter: -Math.PI / 2, label: 'Rally' },
-    { kind: 'alert', angleCenter: 0, label: 'Alert' },
-    { kind: 'text', angleCenter: Math.PI / 2, label: 'Text' },
-    { kind: 'token-attach', angleCenter: Math.PI, label: 'Token' },
+    { kind: 'rally', angleCenter: -Math.PI / 2, i18n: 'pings.radial.rally', fallback: 'Rally' },
+    { kind: 'alert', angleCenter: 0, i18n: 'pings.radial.alert', fallback: 'Alert' },
+    { kind: 'text', angleCenter: Math.PI / 2, i18n: 'pings.radial.text', fallback: 'Text' },
+    { kind: 'token-attach', angleCenter: Math.PI, i18n: 'pings.radial.token', fallback: 'Token' },
 ];
+
+function tr(key: string, fallback: string): string {
+    const out = game.i18n?.localize(key);
+    return out && out !== key ? out : fallback;
+}
+
+/** Convert a 24-bit integer color (0xRRGGBB) into a CSS hex string. */
+function colorToHex(value: number): string {
+    return `#${Math.max(0, Math.min(0xffffff, value)).toString(16).padStart(6, '0')}`;
+}
 
 /**
  * Hit-test a cursor delta against the radial menu. Inside the deadzone the
@@ -70,6 +82,8 @@ export interface OpenRadialMenuOptions {
     clientY: number;
     /** Cursor distance threshold below which the menu commits the "here" default. */
     deadzonePx: number;
+    /** The local user's color (0xRRGGBB). Used to tint chips whose outcome ping is user-colored (here / text / token-attach). */
+    userColor: number;
 }
 
 const SEGMENT_RADIUS_PX = 70;
@@ -93,10 +107,15 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     root.className = 'pings-radial-menu pings-radial-menu--passive';
     root.style.left = `${opts.clientX}px`;
     root.style.top = `${opts.clientY}px`;
+    // Single CSS variable for the user-colored chips (here / text / token).
+    // Rally + alert hardcode their fixed colors in the stylesheet so the
+    // visual mirrors what the resulting ping will look like.
+    root.style.setProperty('--pings-user-color', colorToHex(opts.userColor));
 
     const center = document.createElement('div');
     center.className = 'pings-radial-segment pings-radial-center';
-    center.textContent = 'Ping';
+    center.dataset.kind = 'here';
+    center.textContent = tr('pings.radial.ping', 'Ping');
     root.appendChild(center);
 
     const segments = new Map<PingKind, HTMLDivElement>([['here', center]]);
@@ -104,7 +123,8 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     for (const seg of RADIAL_SEGMENTS) {
         const el = document.createElement('div');
         el.className = 'pings-radial-segment';
-        el.textContent = seg.label;
+        el.dataset.kind = seg.kind;
+        el.textContent = tr(seg.i18n, seg.fallback);
         // Positioning rides on CSS custom properties (--pings-tx / --pings-ty)
         // rather than an inline `transform`, so the .pings-radial-active class
         // can compose the position with a scale() without being overridden by

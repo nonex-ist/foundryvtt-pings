@@ -72,6 +72,16 @@ function warnUser(message: string): void {
     }
 }
 
+function i18n(key: string, fallback: string, data?: Record<string, unknown>): string {
+    const localized = game.i18n?.localize(key, data);
+    if (!localized || localized === key) {
+        if (!data) return fallback;
+        // Apply the same {key}-style interpolation the fallback string uses.
+        return fallback.replace(/\{(\w+)\}/g, (_, k) => String(data[k] ?? ''));
+    }
+    return localized;
+}
+
 function isCurrentSceneDisabled(): boolean {
     return canvas.scene?.getFlag(MODULE_ID, SCENE_FLAG_DISABLED) === true;
 }
@@ -106,7 +116,11 @@ export function createApi(config: CreateApiConfig): ApiBundle {
         if (!moves) return undefined;
         if (!attachedTokens.has(tokenDoc.id)) return undefined;
         ui.notifications?.warn(
-            `Pings: ${tokenDoc.name ?? 'token'} is marked — movement blocked until the marker fades.`,
+            i18n(
+                'pings.notifications.tokenMovementBlocked',
+                'Pings: {name} is marked — movement blocked until the marker fades.',
+                { name: tokenDoc.name ?? 'token' },
+            ),
         );
         return false;
     });
@@ -237,7 +251,12 @@ export function createApi(config: CreateApiConfig): ApiBundle {
     /** Sender-side role gate: refuses to emit alert pings below the configured threshold. */
     function checkSenderRole(kind: PingKind): boolean {
         if (kind === 'alert' && config.userRoleProvider() < getMinAlertRole()) {
-            warnUser('Alert pings require Assistant role or higher.');
+            warnUser(
+                i18n(
+                    'pings.notifications.alertRoleRequired',
+                    'Alert pings require Assistant role or higher.',
+                ),
+            );
             return false;
         }
         return true;
