@@ -1,0 +1,50 @@
+{
+  "name": "foundryvtt-pings",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Click-and-hold map pings for Foundry VTT v14.",
+  "scripts": {
+    "prepare": "husky",
+    "build": "pnpm run build:ts",
+    "build:ts": "esbuild src/module/pings.ts --bundle --format=esm --outfile=src/module/pings.js --sourcemap",
+    "watch": "esbuild src/module/pings.ts --bundle --format=esm --outfile=src/module/pings.js --sourcemap --watch",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "pnpm run lint && pnpm run typecheck && pnpm run test",
+    "clean": "rm -rf dist src/module/pings.js src/module/pings.js.map"
+  },
+  "author": "Jan Ka",
+  "license": "MIT",
+  "homepage": "https://github.com/nonex-ist/foundryvtt-pings",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nonex-ist/foundryvtt-pings.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nonex-ist/foundryvtt-pings/issues"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.0.2",
+    "@commitlint/config-conventional": "^21.0.2",
+    "@eslint/js": "^10.0.1",
+    "esbuild": "^0.28.0",
+    "eslint": "^10.4.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.7",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.1",
+    "vitest": "^4.1.8"
+  },
+  "lint-staged": {
+    "src/**/*.ts": [
+      "eslint --max-warnings 0 --fix"
+    ]
+  }
+}
