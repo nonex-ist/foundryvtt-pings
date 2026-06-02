@@ -54,25 +54,35 @@
 }
 
 .pings-radial-segment {
+    /* --chip-bg is the *solid* color reference for the glow filter on
+     * active state. The actual fill is a radial gradient (defined in the
+     * SVG <defs>) that runs dark at the inner edge to full color at the
+     * outer rim — makes the rim glow read as a highlight against the
+     * dimmer inner surface. */
     --chip-bg: var(--pings-user-color);
-    fill: var(--chip-bg);
+    fill: url(#pings-grad-user);
     stroke: rgba(0, 0, 0, 0.32);
     stroke-width: 1.5;
     stroke-linejoin: round;
     transition:
-        fill 160ms ease-out,
         stroke 160ms ease-out,
         filter 160ms ease-out;
 }
 
 .pings-radial-segment[data-kind="rally"] {
     --chip-bg: #ffc640;
+    fill: url(#pings-grad-rally);
 }
 .pings-radial-segment[data-kind="alert"] {
     --chip-bg: #ff3333;
+    fill: url(#pings-grad-alert);
 }
 
+/* Center "Ping" chip stays a solid fill — it's small (28px radius) so a
+ * gradient would just look like a dark dot. Solid keeps it readable as
+ * the menu's anchor. */
 .pings-radial-center {
+    fill: var(--chip-bg);
     stroke: rgba(0, 0, 0, 0.45);
     stroke-width: 1.5;
 }
@@ -111,13 +121,13 @@
     animation: pings-radial-pulse 1.6s ease-in-out infinite;
 }
 
-/* Disabled segment: greyed-out fill, dim label. Cursor-over it lights
- * the center "Ping" chip instead so the user sees the fallback. */
+/* Disabled segment: flat grey fill (overrides the gradient), dim label.
+ * Cursor-over it lights the center "Ping" chip instead so the user
+ * sees the fallback. */
 .pings-radial-segment.pings-radial-disabled {
     --chip-bg: #4a4a4a;
-    fill: var(--chip-bg);
+    fill: #4a4a4a;
     opacity: 0.55;
-    /* Desaturate (in case someone re-enables via override) and dim. */
     filter: saturate(0.4);
 }
 

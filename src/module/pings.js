@@ -825,6 +825,29 @@ function tr(key, fallback) {
 function colorToHex(value) {
   return `#${Math.max(0, Math.min(16777215, value)).toString(16).padStart(6, "0")}`;
 }
+function darken(color, ratio) {
+  const r = Math.max(0, Math.min(255, Math.floor((color >> 16 & 255) * ratio)));
+  const g = Math.max(0, Math.min(255, Math.floor((color >> 8 & 255) * ratio)));
+  const b = Math.max(0, Math.min(255, Math.floor((color & 255) * ratio)));
+  return r << 16 | g << 8 | b;
+}
+function buildRadialGradient(id, color) {
+  const grad = document.createElementNS(SVG_NS, "radialGradient");
+  grad.setAttribute("id", id);
+  grad.setAttribute("cx", "0");
+  grad.setAttribute("cy", "0");
+  grad.setAttribute("r", `${OUTER_RADIUS_PX}`);
+  grad.setAttribute("gradientUnits", "userSpaceOnUse");
+  const dark = document.createElementNS(SVG_NS, "stop");
+  dark.setAttribute("offset", "0%");
+  dark.setAttribute("stop-color", colorToHex(darken(color, 0.18)));
+  grad.appendChild(dark);
+  const bright = document.createElementNS(SVG_NS, "stop");
+  bright.setAttribute("offset", "100%");
+  bright.setAttribute("stop-color", colorToHex(color));
+  grad.appendChild(bright);
+  return grad;
+}
 function pickKindFromDelta(deltaX, deltaY, deadzonePx) {
   const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
   if (dist < deadzonePx) return "here";
@@ -868,6 +891,11 @@ function openRadialMenu(opts) {
     `${-SVG_HALF_SIZE_PX} ${-SVG_HALF_SIZE_PX} ${SVG_SIZE_PX} ${SVG_SIZE_PX}`
   );
   root.appendChild(svg);
+  const defs = document.createElementNS(SVG_NS, "defs");
+  defs.appendChild(buildRadialGradient("pings-grad-rally", 16762432));
+  defs.appendChild(buildRadialGradient("pings-grad-alert", 16724787));
+  defs.appendChild(buildRadialGradient("pings-grad-user", opts.userColor));
+  svg.appendChild(defs);
   const segments = /* @__PURE__ */ new Map();
   for (const seg of RADIAL_SEGMENTS) {
     const path = document.createElementNS(SVG_NS, "path");

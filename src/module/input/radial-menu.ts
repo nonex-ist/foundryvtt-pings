@@ -34,6 +34,43 @@ function colorToHex(value: number): string {
     return `#${Math.max(0, Math.min(0xffffff, value)).toString(16).padStart(6, '0')}`;
 }
 
+/** Per-channel multiply so 0xffc640 * 0.18 → a dark-amber inner stop. */
+function darken(color: number, ratio: number): number {
+    const r = Math.max(0, Math.min(255, Math.floor(((color >> 16) & 0xff) * ratio)));
+    const g = Math.max(0, Math.min(255, Math.floor(((color >> 8) & 0xff) * ratio)));
+    const b = Math.max(0, Math.min(255, Math.floor((color & 0xff) * ratio)));
+    return (r << 16) | (g << 8) | b;
+}
+
+/**
+ * Build a radial gradient centered on the menu (userSpaceOnUse so it
+ * spans all four wedges identically). Dark stop at 0%, full stop at
+ * 100% — combined with the wedges sitting between INNER and OUTER
+ * radii, each wedge reads as dark at its inner edge and bright at its
+ * outer edge. The bright rim is where the active-state glow lives, so
+ * the highlight pops against the dark inner.
+ */
+function buildRadialGradient(id: string, color: number): SVGElement {
+    const grad = document.createElementNS(SVG_NS, 'radialGradient');
+    grad.setAttribute('id', id);
+    grad.setAttribute('cx', '0');
+    grad.setAttribute('cy', '0');
+    grad.setAttribute('r', `${OUTER_RADIUS_PX}`);
+    grad.setAttribute('gradientUnits', 'userSpaceOnUse');
+
+    const dark = document.createElementNS(SVG_NS, 'stop');
+    dark.setAttribute('offset', '0%');
+    dark.setAttribute('stop-color', colorToHex(darken(color, 0.18)));
+    grad.appendChild(dark);
+
+    const bright = document.createElementNS(SVG_NS, 'stop');
+    bright.setAttribute('offset', '100%');
+    bright.setAttribute('stop-color', colorToHex(color));
+    grad.appendChild(bright);
+
+    return grad;
+}
+
 /**
  * Hit-test a cursor delta against the radial menu. Inside the deadzone the
  * selection is the implicit "here" default; outside, the angle bins into
@@ -166,6 +203,17 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
         `${-SVG_HALF_SIZE_PX} ${-SVG_HALF_SIZE_PX} ${SVG_SIZE_PX} ${SVG_SIZE_PX}`,
     );
     root.appendChild(svg);
+
+    // Radial-gradient defs. Each wedge fills with a gradient that runs
+    // dark-at-inner-edge to bright-at-outer-edge, so the glow ring around
+    // an active wedge pops against the dim inner. Rally + alert hardcode
+    // their fixed colors; the user-colored gradient is built from
+    // `opts.userColor` so it tracks the player.
+    const defs = document.createElementNS(SVG_NS, 'defs');
+    defs.appendChild(buildRadialGradient('pings-grad-rally', 0xffc640));
+    defs.appendChild(buildRadialGradient('pings-grad-alert', 0xff3333));
+    defs.appendChild(buildRadialGradient('pings-grad-user', opts.userColor));
+    svg.appendChild(defs);
 
     const segments = new Map<PingKind, SVGElement>();
 
