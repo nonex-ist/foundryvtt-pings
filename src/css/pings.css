@@ -2,12 +2,11 @@
  *
  * The root is fixed-position at the press location with pointer-events:none
  * so the underlying canvas keeps receiving the pointer events — the trigger
- * is the single source of truth for the gesture. Each segment is positioned
- * via the --pings-tx / --pings-ty custom properties set in radial-menu.ts
- * (cardinal layout + center deadzone). Each chip's background color is
- * dictated by its data-kind attribute so the menu visually mirrors what the
- * resulting ping will look like (rally = gold, alert = red, others tinted
- * with the user color via --pings-user-color).
+ * is the single source of truth for the gesture. The four ring wedges +
+ * center circle live inside an SVG centered on the anchor; each segment's
+ * fill is dictated by its `data-kind` attribute so the menu visually mirrors
+ * what the resulting ping will look like (rally = gold, alert = red, others
+ * tinted with the user color via --pings-user-color).
  *
  * Modes:
  *   .pings-radial-menu--passive  — opens-with default, dim + smaller,
@@ -17,7 +16,7 @@
  *                                   highlight follows the cursor
  *   .pings-radial-active         — applied to the segment under the
  *                                   cursor (active mode only); bumps
- *                                   scale + adds a chip-color glow */
+ *                                   stroke + adds a chip-color glow */
 
 .pings-radial-menu {
     --pings-user-color: rgba(255, 255, 255, 0.85);
@@ -30,64 +29,63 @@
     z-index: 60;
 }
 
-.pings-radial-segment {
-    --chip-bg: var(--pings-user-color);
-    --chip-fg: #ffffff;
+.pings-radial-svg {
     position: absolute;
     top: 0;
     left: 0;
-    width: 60px;
-    height: 60px;
-    margin: -30px 0 0 -30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: var(--chip-bg);
-    color: var(--chip-fg);
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    text-align: center;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-    transform: translate(var(--pings-tx, 0), var(--pings-ty, 0));
-    transition: transform 120ms cubic-bezier(0.2, 0.7, 0.3, 1.2),
-        box-shadow 120ms ease-out, opacity 120ms ease-out;
+    transform: translate(-50%, -50%);
+    transition: opacity 120ms ease-out, transform 120ms cubic-bezier(0.2, 0.7, 0.3, 1.2);
+    overflow: visible;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.55));
 }
 
-/* Per-kind chip colors mirror outcome ping colors. */
+.pings-radial-menu--passive .pings-radial-svg {
+    opacity: 0.55;
+    transform: translate(-50%, -50%) scale(0.85);
+}
+
+.pings-radial-segment {
+    --chip-bg: var(--pings-user-color);
+    fill: var(--chip-bg);
+    stroke: rgba(0, 0, 0, 0.55);
+    stroke-width: 2;
+    transition: fill 120ms ease-out, stroke 120ms ease-out, filter 120ms ease-out;
+}
+
 .pings-radial-segment[data-kind="rally"] {
     --chip-bg: #ffc640;
-    --chip-fg: #1c1300;
-    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4);
 }
-
 .pings-radial-segment[data-kind="alert"] {
     --chip-bg: #ff3333;
-    --chip-fg: #ffffff;
-}
-
-/* here / text / token-attach all use the user color via the root variable. */
-
-.pings-radial-menu--passive .pings-radial-segment {
-    opacity: 0.45;
-    transform: translate(var(--pings-tx, 0), var(--pings-ty, 0)) scale(0.82);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
-}
-
-.pings-radial-segment.pings-radial-active {
-    transform: translate(var(--pings-tx, 0), var(--pings-ty, 0)) scale(1.18);
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35),
-        0 0 16px 4px var(--chip-bg),
-        0 4px 12px rgba(0, 0, 0, 0.55);
 }
 
 .pings-radial-center {
-    width: 52px;
-    height: 52px;
-    margin: -26px 0 0 -26px;
+    stroke: rgba(0, 0, 0, 0.65);
+    stroke-width: 2;
+    opacity: 0.95;
+}
+
+.pings-radial-segment.pings-radial-active {
+    stroke: rgba(255, 255, 255, 0.9);
+    stroke-width: 3;
+    filter: drop-shadow(0 0 10px var(--chip-bg));
+}
+
+.pings-radial-label {
+    fill: #ffffff;
+    font-family: "Signika", sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    /* Outline trick: stroke drawn first, then fill on top — gives readable
+     * text on any chip color without needing per-kind text colors. */
+    paint-order: stroke fill;
+    stroke: rgba(0, 0, 0, 0.85);
+    stroke-width: 3;
+    stroke-linejoin: round;
+}
+
+.pings-radial-center-label {
     font-size: 12px;
-    opacity: 0.85;
 }

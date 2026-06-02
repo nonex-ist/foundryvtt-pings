@@ -86,7 +86,42 @@ export interface OpenRadialMenuOptions {
     userColor: number;
 }
 
-const SEGMENT_RADIUS_PX = 70;
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const INNER_RADIUS_PX = 32;
+const OUTER_RADIUS_PX = 108;
+const CENTER_RADIUS_PX = 28;
+const LABEL_RADIUS_PX = (INNER_RADIUS_PX + OUTER_RADIUS_PX) / 2;
+const SVG_HALF_SIZE_PX = OUTER_RADIUS_PX + 12;
+const SVG_SIZE_PX = SVG_HALF_SIZE_PX * 2;
+
+/**
+ * Build a donut-wedge SVG path: from inner radius to outer radius,
+ * spanning [startAngle, endAngle] radians. Angles use screen space
+ * (0 = right, π/2 = down). Assumes each wedge spans < 180°.
+ */
+function arcPath(
+    innerR: number,
+    outerR: number,
+    startAngle: number,
+    endAngle: number,
+): string {
+    const x1i = innerR * Math.cos(startAngle);
+    const y1i = innerR * Math.sin(startAngle);
+    const x1o = outerR * Math.cos(startAngle);
+    const y1o = outerR * Math.sin(startAngle);
+    const x2o = outerR * Math.cos(endAngle);
+    const y2o = outerR * Math.sin(endAngle);
+    const x2i = innerR * Math.cos(endAngle);
+    const y2i = innerR * Math.sin(endAngle);
+    return (
+        `M ${x1i} ${y1i}` +
+        ` L ${x1o} ${y1o}` +
+        ` A ${outerR} ${outerR} 0 0 1 ${x2o} ${y2o}` +
+        ` L ${x2i} ${y2i}` +
+        ` A ${innerR} ${innerR} 0 0 0 ${x1i} ${y1i}` +
+        ` Z`
+    );
+}
 
 /**
  * Open the radial menu as a DOM overlay anchored at the press position.
@@ -112,30 +147,67 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     // visual mirrors what the resulting ping will look like.
     root.style.setProperty('--pings-user-color', colorToHex(opts.userColor));
 
-    const center = document.createElement('div');
-    center.className = 'pings-radial-segment pings-radial-center';
-    center.dataset.kind = 'here';
-    center.textContent = tr('pings.radial.ping', 'Ping');
-    root.appendChild(center);
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'pings-radial-svg');
+    svg.setAttribute('width', `${SVG_SIZE_PX}`);
+    svg.setAttribute('height', `${SVG_SIZE_PX}`);
+    svg.setAttribute(
+        'viewBox',
+        `${-SVG_HALF_SIZE_PX} ${-SVG_HALF_SIZE_PX} ${SVG_SIZE_PX} ${SVG_SIZE_PX}`,
+    );
+    root.appendChild(svg);
 
-    const segments = new Map<PingKind, HTMLDivElement>([['here', center]]);
+    const segments = new Map<PingKind, SVGElement>();
 
+    // Build the four ring wedges first (so the center circle renders on top
+    // and the labels can sit on top of everything).
     for (const seg of RADIAL_SEGMENTS) {
-        const el = document.createElement('div');
-        el.className = 'pings-radial-segment';
-        el.dataset.kind = seg.kind;
-        el.textContent = tr(seg.i18n, seg.fallback);
-        // Positioning rides on CSS custom properties (--pings-tx / --pings-ty)
-        // rather than an inline `transform`, so the .pings-radial-active class
-        // can compose the position with a scale() without being overridden by
-        // a more-specific inline transform.
-        const offsetX = Math.cos(seg.angleCenter) * SEGMENT_RADIUS_PX;
-        const offsetY = Math.sin(seg.angleCenter) * SEGMENT_RADIUS_PX;
-        el.style.setProperty('--pings-tx', `${offsetX}px`);
-        el.style.setProperty('--pings-ty', `${offsetY}px`);
-        root.appendChild(el);
-        segments.set(seg.kind, el);
+        const path = document.createElementNS(SVG_NS, 'path');
+        path.setAttribute('class', 'pings-radial-segment');
+        path.dataset.kind = seg.kind;
+        const half = Math.PI / 4;
+        path.setAttribute(
+            'd',
+            arcPath(
+                INNER_RADIUS_PX,
+                OUTER_RADIUS_PX,
+                seg.angleCenter - half,
+                seg.angleCenter + half,
+            ),
+        );
+        svg.appendChild(path);
+        segments.set(seg.kind, path);
     }
+
+    // Center circle ("Ping" / here-default).
+    const center = document.createElementNS(SVG_NS, 'circle');
+    center.setAttribute('class', 'pings-radial-segment pings-radial-center');
+    center.dataset.kind = 'here';
+    center.setAttribute('cx', '0');
+    center.setAttribute('cy', '0');
+    center.setAttribute('r', `${CENTER_RADIUS_PX}`);
+    svg.appendChild(center);
+    segments.set('here', center);
+
+    // Labels go last so they're not clipped by sibling fills.
+    for (const seg of RADIAL_SEGMENTS) {
+        const label = document.createElementNS(SVG_NS, 'text');
+        label.setAttribute('class', 'pings-radial-label');
+        label.setAttribute('x', `${LABEL_RADIUS_PX * Math.cos(seg.angleCenter)}`);
+        label.setAttribute('y', `${LABEL_RADIUS_PX * Math.sin(seg.angleCenter)}`);
+        label.setAttribute('text-anchor', 'middle');
+        label.setAttribute('dominant-baseline', 'middle');
+        label.textContent = tr(seg.i18n, seg.fallback);
+        svg.appendChild(label);
+    }
+    const centerLabel = document.createElementNS(SVG_NS, 'text');
+    centerLabel.setAttribute('class', 'pings-radial-label pings-radial-center-label');
+    centerLabel.setAttribute('x', '0');
+    centerLabel.setAttribute('y', '0');
+    centerLabel.setAttribute('text-anchor', 'middle');
+    centerLabel.setAttribute('dominant-baseline', 'middle');
+    centerLabel.textContent = tr('pings.radial.ping', 'Ping');
+    svg.appendChild(centerLabel);
 
     document.body.appendChild(root);
 
@@ -144,7 +216,8 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
 
     const clearHighlight = (): void => {
         if (currentHighlight !== null) {
-            segments.get(currentHighlight)?.classList.remove('pings-radial-active');
+            const el = segments.get(currentHighlight);
+            if (el) el.classList.remove('pings-radial-active');
             currentHighlight = null;
         }
     };
@@ -153,7 +226,8 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
         if (!active) return;
         if (currentHighlight === kind) return;
         clearHighlight();
-        segments.get(kind)?.classList.add('pings-radial-active');
+        const el = segments.get(kind);
+        if (el) el.classList.add('pings-radial-active');
         currentHighlight = kind;
     };
 
