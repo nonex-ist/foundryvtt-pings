@@ -2,6 +2,10 @@
 var MODULE_ID = "pings";
 var HOLD_DURATION_MS = 350;
 var HOLD_CANCEL_TOLERANCE_PX = 5;
+var FADE_IN_MS = 500;
+var FADE_OUT_MS = 500;
+var DEFAULT_PING_DURATION_MS = 6e3;
+var DEFAULT_PING_COLOR = 11184810;
 
 // src/module/input/binding.ts
 var BUTTONS = {
@@ -126,17 +130,143 @@ function installTrigger(config) {
   };
 }
 
+// src/module/render/animation.ts
+function runAnimation(container, config) {
+  const { durationMs, fadeInMs, fadeOutMs, update, onComplete } = config;
+  const ticker = canvas.app.ticker;
+  const startMs = performance.now();
+  const totalMs = fadeInMs + durationMs + fadeOutMs;
+  let canceled = false;
+  const tick = () => {
+    if (canceled) return;
+    const elapsed = performance.now() - startMs;
+    let alpha = 1;
+    if (elapsed < fadeInMs) {
+      alpha = elapsed / fadeInMs;
+    } else if (elapsed > fadeInMs + durationMs) {
+      const fadeOutElapsed = elapsed - fadeInMs - durationMs;
+      alpha = Math.max(0, 1 - fadeOutElapsed / fadeOutMs);
+    }
+    container.alpha = alpha;
+    update(elapsed);
+    if (elapsed >= totalMs) {
+      canceled = true;
+      ticker.remove(tick);
+      onComplete();
+    }
+  };
+  ticker.add(tick);
+  return () => {
+    if (canceled) return;
+    canceled = true;
+    ticker.remove(tick);
+  };
+}
+
+// src/module/render/graphics.ts
+var HERE_RING_COUNT = 3;
+var HERE_CYCLE_MS = 2e3;
+var HERE_LINE_WIDTH = 2;
+var HERE_BASE_ALPHA = 0.55;
+var HERE_INNER_RATIO = 0.15;
+function createHereVisual({ color, size }) {
+  const container = new PIXI.Container();
+  const outerR = size / 2;
+  const innerR = size * HERE_INNER_RATIO;
+  const rings = [];
+  for (let i = 0; i < HERE_RING_COUNT; i++) {
+    const ring = new PIXI.Graphics();
+    container.addChild(ring);
+    rings.push(ring);
+  }
+  function update(elapsedMs) {
+    for (let i = 0; i < HERE_RING_COUNT; i++) {
+      const phase = (elapsedMs / HERE_CYCLE_MS + i / HERE_RING_COUNT) % 1;
+      const radius = outerR + (innerR - outerR) * phase;
+      const alpha = HERE_BASE_ALPHA * (1 - phase * 0.85);
+      const ring = rings[i];
+      ring.clear();
+      ring.lineStyle(HERE_LINE_WIDTH, color, alpha);
+      ring.drawCircle(0, 0, radius);
+    }
+  }
+  update(0);
+  return { container, update };
+}
+function createPingVisual(kind, opts) {
+  switch (kind) {
+    case "here":
+      return createHereVisual(opts);
+    case "rally":
+    case "alert":
+    case "text":
+    case "token-attach":
+      throw new Error(`pings: visual for "${kind}" not yet implemented`);
+  }
+}
+
+// src/module/render/ping.ts
+function createPing(opts) {
+  const parent = canvas.controls.pings;
+  const visual = createPingVisual(opts.kind, { color: opts.color, size: opts.size });
+  visual.container.x = opts.position.x;
+  visual.container.y = opts.position.y;
+  visual.container.alpha = 0;
+  parent.addChild(visual.container);
+  const cleanup = () => {
+    parent.removeChild(visual.container);
+    visual.container.destroy({ children: true });
+  };
+  const cancel = runAnimation(visual.container, {
+    durationMs: opts.durationMs,
+    fadeInMs: FADE_IN_MS,
+    fadeOutMs: FADE_OUT_MS,
+    update: visual.update,
+    onComplete: cleanup
+  });
+  let destroyed = false;
+  return {
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      cancel();
+      cleanup();
+    }
+  };
+}
+
 // src/module/pings.ts
 var teardownTrigger = null;
+function resolveUserColor() {
+  const c = game.user?.color;
+  if (typeof c === "number") return c;
+  if (typeof c === "string") {
+    const hex = c.startsWith("#") ? c.slice(1) : c;
+    const n = parseInt(hex, 16);
+    return Number.isNaN(n) ? DEFAULT_PING_COLOR : n;
+  }
+  if (c && typeof c.valueOf === "function") {
+    const n = c.valueOf();
+    return typeof n === "number" ? n : DEFAULT_PING_COLOR;
+  }
+  return DEFAULT_PING_COLOR;
+}
+function onIntent(intent) {
+  createPing({
+    kind: intent.kind,
+    position: intent.position,
+    color: resolveUserColor(),
+    size: canvas.dimensions.size,
+    durationMs: DEFAULT_PING_DURATION_MS
+  });
+}
 function reinstallTrigger() {
   teardownTrigger?.();
   teardownTrigger = installTrigger({
     binding: parseBinding("LeftClick"),
     holdDurationMs: HOLD_DURATION_MS,
     holdCancelTolerancePx: HOLD_CANCEL_TOLERANCE_PX,
-    onIntent: (intent) => {
-      console.log(`${MODULE_ID} | intent`, intent);
-    }
+    onIntent
   });
 }
 Hooks.once("init", () => {

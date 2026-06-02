@@ -14,25 +14,71 @@ interface PixiMatrixLike {
     ty: number;
 }
 
-interface PixiStageLike {
-    worldTransform: PixiMatrixLike;
+interface PixiContainer {
+    x: number;
+    y: number;
+    alpha: number;
+    rotation: number;
+    visible: boolean;
     scale: PixiPointLike;
+    children: ReadonlyArray<PixiContainer>;
+    addChild<T extends PixiContainer>(child: T): T;
+    removeChild(child: PixiContainer): PixiContainer | undefined;
+    destroy(options?: { children?: boolean }): void;
+}
+
+interface PixiGraphics extends PixiContainer {
+    clear(): PixiGraphics;
+    lineStyle(width: number, color?: number, alpha?: number): PixiGraphics;
+    drawCircle(x: number, y: number, radius: number): PixiGraphics;
+    beginFill(color: number, alpha?: number): PixiGraphics;
+    endFill(): PixiGraphics;
+}
+
+interface PixiStageLike extends PixiContainer {
+    worldTransform: PixiMatrixLike;
+}
+
+interface PixiTickerCallback {
+    (): void;
+}
+
+interface PixiTicker {
+    add(fn: PixiTickerCallback, context?: unknown): PixiTicker;
+    remove(fn: PixiTickerCallback, context?: unknown): PixiTicker;
 }
 
 interface PixiAppLike {
     view: HTMLCanvasElement;
     stage: PixiStageLike;
+    ticker: PixiTicker;
+}
+
+interface FoundryControlsLayer extends PixiContainer {
+    pings: PixiContainer;
+}
+
+interface FoundryCanvasDimensions {
+    size: number;
 }
 
 interface FoundryCanvas {
     ready: boolean;
     app: PixiAppLike;
     stage: PixiStageLike;
+    controls: FoundryControlsLayer;
+    dimensions: FoundryCanvasDimensions;
 }
+
+declare const PIXI: {
+    Container: new () => PixiContainer;
+    Graphics: new () => PixiGraphics;
+};
 
 interface FoundryUser {
     id: string;
     isGM: boolean;
+    color: { valueOf(): number } | number | string;
 }
 
 interface FoundryGameModule {
