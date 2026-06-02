@@ -75,7 +75,7 @@ export function createApi(config: CreateApiConfig): ApiBundle {
             position: payload.position,
             color: payload.color,
             size: config.canvasSizeProvider(),
-            durationMs: DEFAULT_PING_DURATION_MS,
+            durationMs: payload.durationMs ?? DEFAULT_PING_DURATION_MS,
             onDispose: () => {
                 registry.delete(payload.id);
             },
@@ -88,13 +88,16 @@ export function createApi(config: CreateApiConfig): ApiBundle {
     function buildHerePayload(position: WorldPosition, opts: HereOptions | undefined): DisplayPingPayload | null {
         assertPosition(position);
         const color = opts?.color !== undefined ? assertColor(opts.color) : config.senderColorProvider();
-        if (opts?.durationMs !== undefined) assertPositiveInt(opts.durationMs, 'durationMs');
+        const durationMs =
+            opts?.durationMs !== undefined
+                ? assertPositiveInt(opts.durationMs, 'durationMs')
+                : undefined;
 
         const sceneId = config.sceneIdProvider();
         const senderId = config.senderIdProvider();
         if (!sceneId || !senderId) return null;
 
-        return {
+        const payload: DisplayPingPayload = {
             id: foundry.utils.randomID(),
             sceneId,
             senderId,
@@ -103,6 +106,8 @@ export function createApi(config: CreateApiConfig): ApiBundle {
             color,
             moveCanvas: false,
         };
+        if (durationMs !== undefined) payload.durationMs = durationMs;
+        return payload;
     }
 
     return {

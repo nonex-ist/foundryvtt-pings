@@ -44,6 +44,8 @@ describe('assertColor', () => {
         ['Infinity', Infinity],
         ['negative', -1],
         ['too large', 0x1000000],
+        ['float', 0.5],
+        ['integer-valued float with fractional part', 1.0000001],
         ['string', '#ff00ff'],
         ['null', null],
     ])('rejects %s', (_label, value) => {

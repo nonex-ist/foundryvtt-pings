@@ -28,8 +28,13 @@ describe('parseSocketMessage', () => {
             expect(result).toEqual({ type: 'displayPing', payload: validDisplay });
         });
 
-        it('accepts a displayPing with optional text and tokenId', () => {
-            const payload = { ...validDisplay, text: 'hello', tokenId: 'tok1' };
+        it('accepts a displayPing with optional text, tokenId, and durationMs', () => {
+            const payload = {
+                ...validDisplay,
+                text: 'hello',
+                tokenId: 'tok1',
+                durationMs: 3000,
+            };
             const result = parseSocketMessage({ type: 'displayPing', payload });
             expect(result).toEqual({ type: 'displayPing', payload });
         });
@@ -112,6 +117,11 @@ describe('parseSocketMessage', () => {
         it.each([
             ['non-string text', { ...validDisplay, text: 42 }],
             ['non-string tokenId', { ...validDisplay, tokenId: false }],
+            ['zero durationMs', { ...validDisplay, durationMs: 0 }],
+            ['negative durationMs', { ...validDisplay, durationMs: -1 }],
+            ['float durationMs', { ...validDisplay, durationMs: 1.5 }],
+            ['NaN durationMs', { ...validDisplay, durationMs: NaN }],
+            ['string durationMs', { ...validDisplay, durationMs: '1000' }],
         ])('rejects %s', (_label, payload) => {
             expect(parseSocketMessage({ type: 'displayPing', payload })).toBeNull();
         });

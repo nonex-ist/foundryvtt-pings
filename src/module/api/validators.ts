@@ -21,9 +21,14 @@ export function assertPosition(value: unknown, name = 'position'): WorldPosition
 }
 
 export function assertColor(value: unknown, name = 'color'): number {
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > MAX_COLOR) {
+    if (
+        typeof value !== 'number' ||
+        !Number.isInteger(value) ||
+        value < 0 ||
+        value > MAX_COLOR
+    ) {
         throw new TypeError(
-            `pings: ${name} must be a finite number between 0x000000 and 0xffffff`,
+            `pings: ${name} must be an integer between 0x000000 and 0xffffff`,
         );
     }
     return value;
