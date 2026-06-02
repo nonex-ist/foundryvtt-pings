@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-06-02
+
+First release published through the signed CI pipeline. v0.1.0 was
+tagged before the release workflow landed, so no GitHub Release artifact
+exists for it — install URLs and integrators should target v0.2.0+.
+
+### Added
+
+- Release workflow (`.github/workflows/release.yml`) — on tag push,
+  builds the module, stamps manifest/download URLs into `module.json`,
+  generates a CycloneDX SBOM, cosign-keyless-signs every artifact,
+  extracts the matching CHANGELOG section into the release notes, and
+  publishes a GitHub Release with everything attached
+- PR-preview workflow (`.github/workflows/pr-preview.yml`) — on every
+  PR open/sync, builds a stamped preview zip, uploads it as a 14-day
+  workflow artifact, and posts a sticky install-instructions comment
+
+### Changed
+
+- README / ATTRIBUTIONS / CHANGELOG framing tightened so it's
+  unambiguous that this module is **for** Foundry v14 (Azzurite's older
+  module is the inspiration, not the target). Behaviour reference
+  section now cross-links from the intro
+
 ## [0.1.0] — 2026-06-02
 
 First release. Click-and-hold map pings for Foundry VTT v14, fixing the
