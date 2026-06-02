@@ -5,8 +5,17 @@ var HOLD_CANCEL_TOLERANCE_PX = 5;
 var MENU_SUMMON_PX = 25;
 var FADE_IN_MS = 500;
 var FADE_OUT_MS = 500;
-var DEFAULT_PING_DURATION_MS = 6e3;
 var DEFAULT_PING_COLOR = 11184810;
+var KIND_DEFAULT_DURATION_MS = {
+  here: 6e3,
+  rally: 6e3,
+  alert: 1e4,
+  text: 6e3,
+  "token-attach": 4e3
+};
+var ALERT_COLOR = 16724787;
+var MIN_RALLY_ROLE = 2;
+var MIN_ALERT_ROLE = 3;
 var RATE_LIMIT_CAPACITY = 3;
 var RATE_LIMIT_WINDOW_MS = 5e3;
 
@@ -73,21 +82,152 @@ function createHereVisual({ color, size }) {
   update(0);
   return { container, update };
 }
+var RALLY_RING_COUNT = 3;
+var RALLY_CYCLE_MS = 1500;
+var RALLY_LINE_WIDTH = 3;
+var RALLY_BASE_ALPHA = 0.85;
+var RALLY_INNER_RATIO = 0.1;
+var RALLY_OUTER_RATIO = 0.85;
+function createRallyVisual({ color, size }) {
+  const container = new PIXI.Container();
+  const outerR = size * RALLY_OUTER_RATIO;
+  const innerR = size * RALLY_INNER_RATIO;
+  const rings = [];
+  for (let i = 0; i < RALLY_RING_COUNT; i++) {
+    const ring = new PIXI.Graphics();
+    container.addChild(ring);
+    rings.push(ring);
+  }
+  function update(elapsedMs) {
+    for (let i = 0; i < RALLY_RING_COUNT; i++) {
+      const phase = (elapsedMs / RALLY_CYCLE_MS + i / RALLY_RING_COUNT) % 1;
+      const radius = innerR + (outerR - innerR) * phase;
+      const alpha = RALLY_BASE_ALPHA * (1 - phase * 0.7);
+      const ring = rings[i];
+      ring.clear();
+      ring.lineStyle(RALLY_LINE_WIDTH, color, alpha);
+      ring.drawCircle(0, 0, radius);
+    }
+  }
+  update(0);
+  return { container, update };
+}
+var ALERT_LINE_WIDTH = 3;
+var ALERT_ROTATION_PERIOD_MS = 3e3;
+var ALERT_PULSE_PERIOD_MS = 250;
+var ALERT_PULSE_SCALE = 1.2;
+function createAlertVisual({ color, size }) {
+  const container = new PIXI.Container();
+  const chevronDist = size * 0.35;
+  const chevronHalfWidth = size * 0.15;
+  const chevronDepth = size * 0.15;
+  const shape = new PIXI.Graphics();
+  shape.lineStyle(ALERT_LINE_WIDTH, color, 1);
+  shape.moveTo(-chevronHalfWidth, -chevronDist);
+  shape.lineTo(0, -chevronDist - chevronDepth);
+  shape.lineTo(chevronHalfWidth, -chevronDist);
+  shape.moveTo(chevronDist, -chevronHalfWidth);
+  shape.lineTo(chevronDist + chevronDepth, 0);
+  shape.lineTo(chevronDist, chevronHalfWidth);
+  shape.moveTo(-chevronHalfWidth, chevronDist);
+  shape.lineTo(0, chevronDist + chevronDepth);
+  shape.lineTo(chevronHalfWidth, chevronDist);
+  shape.moveTo(-chevronDist, -chevronHalfWidth);
+  shape.lineTo(-chevronDist - chevronDepth, 0);
+  shape.lineTo(-chevronDist, chevronHalfWidth);
+  container.addChild(shape);
+  function update(elapsedMs) {
+    container.rotation = elapsedMs / ALERT_ROTATION_PERIOD_MS * Math.PI * 2;
+    const pulseCycle = elapsedMs / ALERT_PULSE_PERIOD_MS % 2;
+    const scale = pulseCycle < 1 ? 1 : ALERT_PULSE_SCALE;
+    container.scale.x = scale;
+    container.scale.y = scale;
+  }
+  update(0);
+  return { container, update };
+}
+var TEXT_PADDING_PX = 8;
+var TEXT_CORNER_RADIUS_PX = 6;
+var TEXT_FONT_SIZE = 18;
+var TEXT_BG_ALPHA = 0.65;
+var TEXT_MAX_WIDTH_PX = 320;
+function createTextVisual({ color, text }) {
+  const container = new PIXI.Container();
+  const label = new PIXI.Text(text ?? "", {
+    fontFamily: "Signika, sans-serif",
+    fontSize: TEXT_FONT_SIZE,
+    fill: 16777215,
+    stroke: 0,
+    strokeThickness: 4,
+    align: "center",
+    wordWrap: true,
+    wordWrapWidth: TEXT_MAX_WIDTH_PX
+  });
+  label.anchor.x = 0.5;
+  label.anchor.y = 0.5;
+  const bg = new PIXI.Graphics();
+  bg.beginFill(color, TEXT_BG_ALPHA);
+  bg.drawRoundedRect(
+    -label.width / 2 - TEXT_PADDING_PX,
+    -label.height / 2 - TEXT_PADDING_PX,
+    label.width + TEXT_PADDING_PX * 2,
+    label.height + TEXT_PADDING_PX * 2,
+    TEXT_CORNER_RADIUS_PX
+  );
+  bg.endFill();
+  container.addChild(bg);
+  container.addChild(label);
+  function update(_elapsedMs) {
+  }
+  return { container, update };
+}
+var TOKEN_BRACKET_LINE_WIDTH = 3;
+function createTokenAttachVisual({ color, size }) {
+  const container = new PIXI.Container();
+  const cornerOffset = size * 0.5;
+  const armLength = size * 0.2;
+  const brackets = new PIXI.Graphics();
+  brackets.lineStyle(TOKEN_BRACKET_LINE_WIDTH, color, 0.95);
+  brackets.moveTo(-cornerOffset, -cornerOffset + armLength);
+  brackets.lineTo(-cornerOffset, -cornerOffset);
+  brackets.lineTo(-cornerOffset + armLength, -cornerOffset);
+  brackets.moveTo(cornerOffset - armLength, -cornerOffset);
+  brackets.lineTo(cornerOffset, -cornerOffset);
+  brackets.lineTo(cornerOffset, -cornerOffset + armLength);
+  brackets.moveTo(cornerOffset, cornerOffset - armLength);
+  brackets.lineTo(cornerOffset, cornerOffset);
+  brackets.lineTo(cornerOffset - armLength, cornerOffset);
+  brackets.moveTo(-cornerOffset + armLength, cornerOffset);
+  brackets.lineTo(-cornerOffset, cornerOffset);
+  brackets.lineTo(-cornerOffset, cornerOffset - armLength);
+  container.addChild(brackets);
+  function update(_elapsedMs) {
+  }
+  return { container, update };
+}
 function createPingVisual(kind, opts) {
   switch (kind) {
     case "here":
-    case "rally":
-    case "alert":
-    case "text":
-    case "token-attach":
       return createHereVisual(opts);
+    case "rally":
+      return createRallyVisual(opts);
+    case "alert":
+      return createAlertVisual(opts);
+    case "text":
+      return createTextVisual(opts);
+    case "token-attach":
+      return createTokenAttachVisual(opts);
   }
 }
 
 // src/module/render/ping.ts
 function createPing(opts) {
   const parent = canvas.controls.pings;
-  const visual = createPingVisual(opts.kind, { color: opts.color, size: opts.size });
+  const visual = createPingVisual(opts.kind, {
+    color: opts.color,
+    size: opts.size,
+    text: opts.text
+  });
   visual.container.x = opts.position.x;
   visual.container.y = opts.position.y;
   visual.container.alpha = 0;
@@ -100,11 +240,18 @@ function createPing(opts) {
     visual.container.destroy({ children: true });
     opts.onDispose?.();
   };
+  const { positionProvider } = opts;
+  const frameUpdate = positionProvider ? (elapsedMs) => {
+    const pos = positionProvider();
+    visual.container.x = pos.x;
+    visual.container.y = pos.y;
+    visual.update(elapsedMs);
+  } : visual.update;
   const cancel = runAnimation(visual.container, {
     durationMs: opts.durationMs,
     fadeInMs: FADE_IN_MS,
     fadeOutMs: FADE_OUT_MS,
-    update: visual.update,
+    update: frameUpdate,
     onComplete: dispose
   });
   return {
@@ -117,6 +264,13 @@ function createPing(opts) {
 
 // src/module/api/validators.ts
 var MAX_COLOR = 16777215;
+var VALID_KINDS = /* @__PURE__ */ new Set([
+  "here",
+  "rally",
+  "alert",
+  "text",
+  "token-attach"
+]);
 function assertPosition(value, name = "position") {
   if (value === null || typeof value !== "object" || !Number.isFinite(value.x) || !Number.isFinite(value.y)) {
     throw new TypeError(`pings: ${name} must be { x: number, y: number } with finite values`);
@@ -143,29 +297,73 @@ function assertPositiveInt(value, name) {
   }
   return value;
 }
+function assertKind(value, name = "kind") {
+  if (typeof value !== "string" || !VALID_KINDS.has(value)) {
+    const allowed = [...VALID_KINDS].join(", ");
+    throw new TypeError(`pings: ${name} must be one of: ${allowed}`);
+  }
+  return value;
+}
 
 // src/module/api/index.ts
+function warnUser(message) {
+  if (typeof ui !== "undefined" && ui?.notifications) {
+    ui.notifications.warn(message);
+  } else {
+    console.warn(`${MODULE_ID} | ${message}`);
+  }
+}
 function createApi(config) {
   const registry = /* @__PURE__ */ new Map();
   function displayLocally(payload) {
+    let positionProvider;
+    if (payload.kind === "token-attach" && payload.tokenId) {
+      const tokenId = payload.tokenId;
+      const fallback = payload.position;
+      positionProvider = () => canvas.tokens?.get(tokenId)?.center ?? fallback;
+    }
     const handle = createPing({
       kind: payload.kind,
       position: payload.position,
       color: payload.color,
       size: config.canvasSizeProvider(),
-      durationMs: payload.durationMs ?? DEFAULT_PING_DURATION_MS,
+      durationMs: payload.durationMs ?? KIND_DEFAULT_DURATION_MS[payload.kind],
+      text: payload.text,
+      positionProvider,
       onDispose: () => {
         registry.delete(payload.id);
       }
     });
+    if (payload.kind === "rally" && payload.moveCanvas && config.userRoleProvider() >= MIN_RALLY_ROLE) {
+      void canvas.animatePan({ x: payload.position.x, y: payload.position.y, duration: 250 });
+    }
+    if (payload.kind !== "rally" && canvas.controls?.drawOffscreenPing) {
+      try {
+        canvas.controls.drawOffscreenPing(payload.position, {
+          color: payload.color,
+          duration: payload.durationMs ?? KIND_DEFAULT_DURATION_MS[payload.kind]
+        });
+      } catch (err) {
+        console.warn(`${MODULE_ID} | drawOffscreenPing failed`, err);
+      }
+    }
     registry.set(payload.id, handle);
     Hooks.callAll("pings.display", handle, payload);
     return handle;
   }
   function buildPayload(kind, position, opts) {
+    assertKind(kind);
     assertPosition(position);
-    const color = opts?.color !== void 0 ? assertColor(opts.color) : config.senderColorProvider();
-    const durationMs = opts?.durationMs !== void 0 ? assertPositiveInt(opts.durationMs, "durationMs") : void 0;
+    let color;
+    if (opts?.color !== void 0) {
+      color = assertColor(opts.color);
+    } else if (kind === "alert") {
+      color = ALERT_COLOR;
+    } else {
+      color = config.senderColorProvider();
+    }
+    const durationMs = opts?.durationMs !== void 0 ? assertPositiveInt(opts.durationMs, "durationMs") : KIND_DEFAULT_DURATION_MS[kind];
+    const moveCanvas = opts?.moveCanvas !== void 0 ? opts.moveCanvas : kind === "rally";
     const sceneId = config.sceneIdProvider();
     const senderId = config.senderIdProvider();
     if (!sceneId || !senderId) return null;
@@ -176,12 +374,32 @@ function createApi(config) {
       kind,
       position,
       color,
-      moveCanvas: false
+      durationMs,
+      moveCanvas
     };
-    if (durationMs !== void 0) payload.durationMs = durationMs;
+    if (opts?.text !== void 0) {
+      if (typeof opts.text !== "string") {
+        throw new TypeError("pings: text must be a string");
+      }
+      payload.text = opts.text;
+    }
+    if (opts?.tokenId !== void 0) {
+      if (typeof opts.tokenId !== "string" || opts.tokenId.length === 0) {
+        throw new TypeError("pings: tokenId must be a non-empty string");
+      }
+      payload.tokenId = opts.tokenId;
+    }
     return payload;
   }
+  function checkSenderRole(kind) {
+    if (kind === "alert" && config.userRoleProvider() < MIN_ALERT_ROLE) {
+      warnUser("Alert pings require Assistant role or higher.");
+      return false;
+    }
+    return true;
+  }
   function ping(kind, position, opts) {
+    if (!checkSenderRole(kind)) return null;
     const payload = buildPayload(kind, position, opts);
     if (!payload) return null;
     if (!Hooks.call("pings.preDisplay", payload)) return null;
@@ -190,6 +408,7 @@ function createApi(config) {
     return payload.id;
   }
   function showPing(kind, position, opts) {
+    if (!checkSenderRole(kind)) return null;
     const payload = buildPayload(kind, position, opts);
     if (!payload) return null;
     if (!Hooks.call("pings.preDisplay", payload)) return null;
@@ -197,6 +416,7 @@ function createApi(config) {
     return payload.id;
   }
   function sendPing(kind, position, opts) {
+    if (!checkSenderRole(kind)) return null;
     const payload = buildPayload(kind, position, opts);
     if (!payload) return null;
     if (!Hooks.call("pings.preDisplay", payload)) return null;
@@ -310,7 +530,6 @@ function pickKindFromDelta(deltaX, deltaY, deadzonePx) {
   return "token-attach";
 }
 var SEGMENT_RADIUS_PX = 70;
-var SEGMENT_HALF_SIZE_PX = 28;
 function openRadialMenu(opts) {
   const root = document.createElement("div");
   root.className = "pings-radial-menu";
@@ -325,9 +544,10 @@ function openRadialMenu(opts) {
     const el = document.createElement("div");
     el.className = "pings-radial-segment";
     el.textContent = seg.label;
-    const offsetX = Math.cos(seg.angleCenter) * SEGMENT_RADIUS_PX - SEGMENT_HALF_SIZE_PX;
-    const offsetY = Math.sin(seg.angleCenter) * SEGMENT_RADIUS_PX - SEGMENT_HALF_SIZE_PX;
-    el.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+    const offsetX = Math.cos(seg.angleCenter) * SEGMENT_RADIUS_PX;
+    const offsetY = Math.sin(seg.angleCenter) * SEGMENT_RADIUS_PX;
+    el.style.setProperty("--pings-tx", `${offsetX}px`);
+    el.style.setProperty("--pings-ty", `${offsetY}px`);
     root.appendChild(el);
     segments.set(seg.kind, el);
   }
@@ -413,7 +633,7 @@ function installTrigger(config) {
       return;
     }
     if (hold.phase === "preview") {
-      if (distSq > config.menuSummonPx * config.menuSummonPx) {
+      if (distSq >= config.menuSummonPx * config.menuSummonPx) {
         hold.previewDispose?.();
         hold.previewDispose = null;
         hold.menu = config.callbacks.openMenu(
@@ -573,6 +793,13 @@ function resolveUserColor() {
   }
   return DEFAULT_PING_COLOR;
 }
+function findTokenIdAt(position) {
+  const placeables = canvas.tokens?.placeables ?? [];
+  for (const token of placeables) {
+    if (token.bounds.contains(position.x, position.y)) return token.id;
+  }
+  return null;
+}
 function showPreviewPing(position) {
   const id = apiBundle?.api.showHere(position) ?? null;
   return () => {
@@ -580,11 +807,23 @@ function showPreviewPing(position) {
   };
 }
 function commitPing(kind, position) {
-  if (kind === "here") {
-    apiBundle?.api.sendHere(position);
-  } else {
-    apiBundle?.api.ping(kind, position);
+  if (!apiBundle) return;
+  if (kind === "text") {
+    const text = window.prompt("Pings \u2014 text:");
+    if (!text) return;
+    apiBundle.api.ping("text", position, { text });
+    return;
   }
+  if (kind === "token-attach") {
+    const tokenId = findTokenIdAt(position);
+    if (!tokenId) {
+      ui?.notifications?.warn("Pings: no token under the cursor.");
+      return;
+    }
+    apiBundle.api.ping("token-attach", position, { tokenId });
+    return;
+  }
+  apiBundle.api.ping(kind, position);
 }
 function reinstallTrigger() {
   teardownTrigger?.();
@@ -621,6 +860,7 @@ Hooks.once("ready", () => {
     sceneIdProvider: () => canvas.scene?.id ?? null,
     senderIdProvider: () => game.user?.id ?? null,
     senderColorProvider: resolveUserColor,
+    userRoleProvider: () => game.user?.role ?? 0,
     canvasSizeProvider: () => canvas.dimensions.size,
     socketProvider: () => socketHandle
   });

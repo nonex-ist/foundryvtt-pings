@@ -9,6 +9,14 @@ export interface PingOptions {
     color: number;
     size: number;
     durationMs: number;
+    /** Text label for the `text` ping kind; ignored by other kinds. */
+    text?: string;
+    /**
+     * Called every frame to recompute the ping's world position. When
+     * supplied, the container's x/y is updated before the visual's update
+     * runs — used by the token-attach kind to follow a moving token.
+     */
+    positionProvider?: () => WorldPosition;
     /**
      * Fired exactly once when the ping is torn down — either by natural
      * animation completion or by an external `handle.destroy()`. Useful
@@ -24,12 +32,15 @@ export interface PingHandle {
 /**
  * Build a ping, mount it into `canvas.controls.pings`, run its lifecycle
  * animation, and clean up when the animation completes. Returns a handle
- * whose `destroy` aborts the animation early (e.g. for network-driven
- * removal once that lands).
+ * whose `destroy` aborts the animation early.
  */
 export function createPing(opts: PingOptions): PingHandle {
     const parent = canvas.controls.pings;
-    const visual = createPingVisual(opts.kind, { color: opts.color, size: opts.size });
+    const visual = createPingVisual(opts.kind, {
+        color: opts.color,
+        size: opts.size,
+        text: opts.text,
+    });
 
     visual.container.x = opts.position.x;
     visual.container.y = opts.position.y;
@@ -45,11 +56,21 @@ export function createPing(opts: PingOptions): PingHandle {
         opts.onDispose?.();
     };
 
+    const { positionProvider } = opts;
+    const frameUpdate = positionProvider
+        ? (elapsedMs: number): void => {
+              const pos = positionProvider();
+              visual.container.x = pos.x;
+              visual.container.y = pos.y;
+              visual.update(elapsedMs);
+          }
+        : visual.update;
+
     const cancel = runAnimation(visual.container, {
         durationMs: opts.durationMs,
         fadeInMs: FADE_IN_MS,
         fadeOutMs: FADE_OUT_MS,
-        update: visual.update,
+        update: frameUpdate,
         onComplete: dispose,
     });
 
