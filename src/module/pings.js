@@ -831,6 +831,16 @@ function darken(color, ratio) {
   const b = Math.max(0, Math.min(255, Math.floor((color & 255) * ratio)));
   return r << 16 | g << 8 | b;
 }
+function lighten(color, amount) {
+  const r = color >> 16 & 255;
+  const g = color >> 8 & 255;
+  const b = color & 255;
+  const nr = Math.floor(r + (255 - r) * amount);
+  const ng = Math.floor(g + (255 - g) * amount);
+  const nb = Math.floor(b + (255 - b) * amount);
+  return nr << 16 | ng << 8 | nb;
+}
+var GRADIENT_INNER_RATIO = 0.4;
 function buildRadialGradient(id, color) {
   const grad = document.createElementNS(SVG_NS, "radialGradient");
   grad.setAttribute("id", id);
@@ -840,7 +850,7 @@ function buildRadialGradient(id, color) {
   grad.setAttribute("gradientUnits", "userSpaceOnUse");
   const dark = document.createElementNS(SVG_NS, "stop");
   dark.setAttribute("offset", "0%");
-  dark.setAttribute("stop-color", colorToHex(darken(color, 0.18)));
+  dark.setAttribute("stop-color", colorToHex(darken(color, GRADIENT_INNER_RATIO)));
   grad.appendChild(dark);
   const bright = document.createElementNS(SVG_NS, "stop");
   bright.setAttribute("offset", "100%");
@@ -880,7 +890,12 @@ function openRadialMenu(opts) {
   root.className = "pings-radial-menu pings-radial-menu--passive";
   root.style.left = `${opts.clientX}px`;
   root.style.top = `${opts.clientY}px`;
-  root.style.setProperty("--pings-user-color", colorToHex(opts.userColor));
+  const userBase = opts.userColor;
+  const userLight = lighten(opts.userColor, 0.4);
+  const userDark = darken(opts.userColor, 0.55);
+  root.style.setProperty("--pings-user-base", colorToHex(userBase));
+  root.style.setProperty("--pings-user-light", colorToHex(userLight));
+  root.style.setProperty("--pings-user-dark", colorToHex(userDark));
   const disabledKinds = new Set(opts.disabledKinds ?? []);
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("class", "pings-radial-svg");
@@ -894,7 +909,8 @@ function openRadialMenu(opts) {
   const defs = document.createElementNS(SVG_NS, "defs");
   defs.appendChild(buildRadialGradient("pings-grad-rally", 16762432));
   defs.appendChild(buildRadialGradient("pings-grad-alert", 16724787));
-  defs.appendChild(buildRadialGradient("pings-grad-user", opts.userColor));
+  defs.appendChild(buildRadialGradient("pings-grad-text", userLight));
+  defs.appendChild(buildRadialGradient("pings-grad-token", userDark));
   svg.appendChild(defs);
   const segments = /* @__PURE__ */ new Map();
   for (const seg of RADIAL_SEGMENTS) {

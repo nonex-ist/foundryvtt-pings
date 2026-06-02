@@ -34,12 +34,23 @@ function colorToHex(value: number): string {
     return `#${Math.max(0, Math.min(0xffffff, value)).toString(16).padStart(6, '0')}`;
 }
 
-/** Per-channel multiply so 0xffc640 * 0.18 → a dark-amber inner stop. */
+/** Per-channel multiply: 0xffc640 * 0.4 → a recognizable dark-amber, not near-black. */
 function darken(color: number, ratio: number): number {
     const r = Math.max(0, Math.min(255, Math.floor(((color >> 16) & 0xff) * ratio)));
     const g = Math.max(0, Math.min(255, Math.floor(((color >> 8) & 0xff) * ratio)));
     const b = Math.max(0, Math.min(255, Math.floor((color & 0xff) * ratio)));
     return (r << 16) | (g << 8) | b;
+}
+
+/** Blend a color toward white by `amount` (0 = unchanged, 1 = white). Preserves saturation better than naive channel-multiply when going lighter. */
+function lighten(color: number, amount: number): number {
+    const r = (color >> 16) & 0xff;
+    const g = (color >> 8) & 0xff;
+    const b = color & 0xff;
+    const nr = Math.floor(r + (255 - r) * amount);
+    const ng = Math.floor(g + (255 - g) * amount);
+    const nb = Math.floor(b + (255 - b) * amount);
+    return (nr << 16) | (ng << 8) | nb;
 }
 
 /**
@@ -50,6 +61,8 @@ function darken(color: number, ratio: number): number {
  * outer edge. The bright rim is where the active-state glow lives, so
  * the highlight pops against the dark inner.
  */
+const GRADIENT_INNER_RATIO = 0.4;
+
 function buildRadialGradient(id: string, color: number): SVGElement {
     const grad = document.createElementNS(SVG_NS, 'radialGradient');
     grad.setAttribute('id', id);
@@ -58,9 +71,12 @@ function buildRadialGradient(id: string, color: number): SVGElement {
     grad.setAttribute('r', `${OUTER_RADIUS_PX}`);
     grad.setAttribute('gradientUnits', 'userSpaceOnUse');
 
+    // Inner stop is a darker shade of the wedge's *own color* (not black-
+    // tinted) — keeps the hue legible while giving the rim enough contrast
+    // for the active glow to read.
     const dark = document.createElementNS(SVG_NS, 'stop');
     dark.setAttribute('offset', '0%');
-    dark.setAttribute('stop-color', colorToHex(darken(color, 0.18)));
+    dark.setAttribute('stop-color', colorToHex(darken(color, GRADIENT_INNER_RATIO)));
     grad.appendChild(dark);
 
     const bright = document.createElementNS(SVG_NS, 'stop');
@@ -187,10 +203,16 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     root.className = 'pings-radial-menu pings-radial-menu--passive';
     root.style.left = `${opts.clientX}px`;
     root.style.top = `${opts.clientY}px`;
-    // Single CSS variable for the user-colored chips (here / text / token).
-    // Rally + alert hardcode their fixed colors in the stylesheet so the
-    // visual mirrors what the resulting ping will look like.
-    root.style.setProperty('--pings-user-color', colorToHex(opts.userColor));
+    // Derive three shades of the user color so the three user-colored
+    // chips (center "Ping", text wedge, token wedge) are clearly
+    // distinguishable from each other while remaining members of the
+    // same color family. Rally + alert keep their fixed colors.
+    const userBase = opts.userColor;
+    const userLight = lighten(opts.userColor, 0.4);
+    const userDark = darken(opts.userColor, 0.55);
+    root.style.setProperty('--pings-user-base', colorToHex(userBase));
+    root.style.setProperty('--pings-user-light', colorToHex(userLight));
+    root.style.setProperty('--pings-user-dark', colorToHex(userDark));
 
     const disabledKinds = new Set<PingKind>(opts.disabledKinds ?? []);
 
@@ -212,7 +234,8 @@ export function openRadialMenu(opts: OpenRadialMenuOptions): MenuController {
     const defs = document.createElementNS(SVG_NS, 'defs');
     defs.appendChild(buildRadialGradient('pings-grad-rally', 0xffc640));
     defs.appendChild(buildRadialGradient('pings-grad-alert', 0xff3333));
-    defs.appendChild(buildRadialGradient('pings-grad-user', opts.userColor));
+    defs.appendChild(buildRadialGradient('pings-grad-text', userLight));
+    defs.appendChild(buildRadialGradient('pings-grad-token', userDark));
     svg.appendChild(defs);
 
     const segments = new Map<PingKind, SVGElement>();

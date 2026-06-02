@@ -20,7 +20,9 @@
  *                                   pulse */
 
 .pings-radial-menu {
-    --pings-user-color: rgba(255, 255, 255, 0.85);
+    --pings-user-base: rgba(255, 255, 255, 0.85);
+    --pings-user-light: rgba(255, 255, 255, 0.95);
+    --pings-user-dark: rgba(255, 255, 255, 0.55);
     position: fixed;
     top: 0;
     left: 0;
@@ -59,8 +61,7 @@
      * SVG <defs>) that runs dark at the inner edge to full color at the
      * outer rim — makes the rim glow read as a highlight against the
      * dimmer inner surface. */
-    --chip-bg: var(--pings-user-color);
-    fill: url(#pings-grad-user);
+    --chip-bg: var(--pings-user-base);
     stroke: rgba(0, 0, 0, 0.32);
     stroke-width: 1.5;
     stroke-linejoin: round;
@@ -77,11 +78,21 @@
     --chip-bg: #ff3333;
     fill: url(#pings-grad-alert);
 }
+.pings-radial-segment[data-kind="text"] {
+    --chip-bg: var(--pings-user-light);
+    fill: url(#pings-grad-text);
+}
+.pings-radial-segment[data-kind="token-attach"] {
+    --chip-bg: var(--pings-user-dark);
+    fill: url(#pings-grad-token);
+}
 
 /* Center "Ping" chip stays a solid fill — it's small (28px radius) so a
- * gradient would just look like a dark dot. Solid keeps it readable as
- * the menu's anchor. */
+ * gradient would just look like a dark dot. Solid uses the *base* user
+ * color so the three user-colored chips read as a light/base/dark
+ * triplet (text/center/token). */
 .pings-radial-center {
+    --chip-bg: var(--pings-user-base);
     fill: var(--chip-bg);
     stroke: rgba(0, 0, 0, 0.45);
     stroke-width: 1.5;
