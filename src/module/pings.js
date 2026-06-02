@@ -275,14 +275,15 @@ function createRallyVisual({ color, size }) {
     for (let i = 0; i < RALLY_ARROW_COUNT; i++) {
       const phase = (elapsedMs / RALLY_CYCLE_MS + i / RALLY_ARROW_COUNT) % 1;
       const radius = outerR - (outerR - innerR) * phase;
+      const safeArm = Math.min(armLen, radius * 0.85);
       const fade = phase < 0.15 ? phase / 0.15 : 1 - (phase - 0.15) / 0.85;
       const alpha = RALLY_BASE_ALPHA * fade;
       const g = arrows[i];
       g.clear();
       g.lineStyle(RALLY_LINE_WIDTH, color, alpha);
-      g.moveTo(radius, -armLen);
-      g.lineTo(radius - armLen, 0);
-      g.lineTo(radius, armLen);
+      g.moveTo(radius, -safeArm);
+      g.lineTo(radius - safeArm, 0);
+      g.lineTo(radius, safeArm);
     }
   }
   update(0);
@@ -1258,6 +1259,29 @@ var teardownTrigger = null;
 var socketHandle = null;
 var apiBundle = null;
 var audio = null;
+var previewExpiresAt = 0;
+function tr2(key, fallback) {
+  const out = game.i18n?.localize(key);
+  return out && out !== key ? out : fallback;
+}
+function escapeHtml(value) {
+  return value.replace(/[&<>"']/g, (c) => {
+    switch (c) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return c;
+    }
+  });
+}
 function resolveUserColor() {
   const c = game.user?.color;
   if (typeof c === "number") return c;
@@ -1280,13 +1304,15 @@ function findTokenIdAt(position) {
   return null;
 }
 function showPreviewBundle(worldPosition, clientPosition) {
+  const previewDurationMs = KIND_DEFAULT_DURATION_MS.here;
   const handle = createPing({
     kind: "here",
     position: worldPosition,
     color: resolveUserColor(),
     size: canvas.dimensions.size,
-    durationMs: KIND_DEFAULT_DURATION_MS.here
+    durationMs: previewDurationMs
   });
+  previewExpiresAt = Date.now() + previewDurationMs + FADE_IN_MS + FADE_OUT_MS;
   const disabledKinds = findTokenIdAt(worldPosition) ? [] : ["token-attach"];
   const menu = openRadialMenu({
     clientX: clientPosition.x,
@@ -1301,19 +1327,18 @@ function showPreviewBundle(worldPosition, clientPosition) {
   };
 }
 async function promptForTextPing(position) {
-  const localize = (key, fallback) => game.i18n?.localize(key) ?? fallback;
   const dialog = foundry.applications?.api?.DialogV2;
   if (!dialog) {
-    const text2 = window.prompt(localize("pings.dialog.textPrompt", "Ping text:"));
+    const text2 = window.prompt(tr2("pings.dialog.textPrompt", "Ping text:"));
     if (text2) apiBundle?.api.ping("text", position, { text: text2 });
     return;
   }
-  const title = localize("pings.dialog.textTitle", "Pings \u2014 text");
-  const label = localize("pings.dialog.textLabel", "Text");
-  const confirm = localize("pings.dialog.textConfirm", "Ping");
+  const title = tr2("pings.dialog.textTitle", "Pings \u2014 text");
+  const label = tr2("pings.dialog.textLabel", "Text");
+  const confirm = tr2("pings.dialog.textConfirm", "Ping");
   const result = await dialog.input({
     window: { title },
-    content: `<div class="form-group"><label>${label}</label><input type="text" name="text" autofocus required maxlength="200" /></div>`,
+    content: `<div class="form-group"><label>${escapeHtml(label)}</label><input type="text" name="text" autofocus required maxlength="200" /></div>`,
     ok: { label: confirm, icon: "fa-solid fa-location-crosshairs" }
   });
   const text = result?.text?.trim();
@@ -1325,7 +1350,8 @@ function commitPing(kind, position, previewDispose) {
     previewDispose?.();
     return;
   }
-  if (kind === "here" && previewDispose) {
+  const previewAlive = previewDispose !== null && Date.now() < previewExpiresAt;
+  if (kind === "here" && previewAlive) {
     audio?.play("here");
     apiBundle.api.sendHere(position);
     return;
@@ -1339,7 +1365,7 @@ function commitPing(kind, position, previewDispose) {
     const tokenId = findTokenIdAt(position);
     if (!tokenId) {
       ui?.notifications?.warn(
-        game.i18n?.localize("pings.notifications.noTokenUnderCursor") ?? "Pings: no token under the cursor."
+        tr2("pings.notifications.noTokenUnderCursor", "Pings: no token under the cursor.")
       );
       return;
     }

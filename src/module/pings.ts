@@ -11,7 +11,13 @@
 
 import { createApi, type ApiBundle, type PingsApi } from './api/index.js';
 import { createAudioController } from './audio/play.js';
-import { DEFAULT_PING_COLOR, KIND_DEFAULT_DURATION_MS, MODULE_ID } from './constants.js';
+import {
+    DEFAULT_PING_COLOR,
+    FADE_IN_MS,
+    FADE_OUT_MS,
+    KIND_DEFAULT_DURATION_MS,
+    MODULE_ID,
+} from './constants.js';
 import { parseBinding } from './input/binding.js';
 import { openRadialMenu } from './input/radial-menu.js';
 import { installTrigger } from './input/trigger.js';
@@ -37,6 +43,34 @@ let teardownTrigger: (() => void) | null = null;
 let socketHandle: SocketHandle | null = null;
 let apiBundle: ApiBundle | null = null;
 let audio: ReturnType<typeof createAudioController> | null = null;
+/**
+ * Wall-clock time after which the current preview has self-disposed
+ * (fadeIn + duration + fadeOut). Used by the commit handler to decide
+ * whether to keep + broadcast (preview alive) or render fresh (preview
+ * already ended) — guards against the silent-no-ping case when the
+ * user holds longer than the preview's natural lifetime.
+ */
+let previewExpiresAt = 0;
+
+/** Foundry's i18n returns the key itself when no translation exists, so a `??` fallback never fires; explicitly compare against the key. */
+function tr(key: string, fallback: string): string {
+    const out = game.i18n?.localize(key);
+    return out && out !== key ? out : fallback;
+}
+
+/** Escape user-facing strings before interpolating into Dialog HTML so a localized translation containing `<` / `&` / `"` doesn't get rendered as markup. */
+function escapeHtml(value: string): string {
+    return value.replace(/[&<>"']/g, (c) => {
+        switch (c) {
+            case '&': return '&amp;';
+            case '<': return '&lt;';
+            case '>': return '&gt;';
+            case '"': return '&quot;';
+            case "'": return '&#39;';
+            default: return c;
+        }
+    });
+}
 
 function resolveUserColor(): number {
     const c = game.user?.color;
@@ -71,13 +105,18 @@ function showPreviewBundle(
     // listeners) and must NOT be registered for removal. Direct createPing
     // gives us the visual without the ceremony. Audio + hooks fire on the
     // commit path instead.
+    const previewDurationMs = KIND_DEFAULT_DURATION_MS.here;
     const handle = createPing({
         kind: 'here',
         position: worldPosition,
         color: resolveUserColor(),
         size: canvas.dimensions.size,
-        durationMs: KIND_DEFAULT_DURATION_MS.here,
+        durationMs: previewDurationMs,
     });
+    // FADE_IN_MS + main duration + FADE_OUT_MS = total wall-clock lifetime.
+    // The commit handler checks this to know if the preview is still on
+    // screen at release time (long holds can outlive it).
+    previewExpiresAt = Date.now() + previewDurationMs + FADE_IN_MS + FADE_OUT_MS;
     // Token segment is unavailable when there's no token at the press
     // point — the menu greys it out and falls back to 'here' on release.
     const disabledKinds: PingKind[] = findTokenIdAt(worldPosition)
@@ -101,25 +140,22 @@ function showPreviewBundle(
 }
 
 async function promptForTextPing(position: WorldPosition): Promise<void> {
-    const localize = (key: string, fallback: string): string =>
-        game.i18n?.localize(key) ?? fallback;
-
     const dialog = foundry.applications?.api?.DialogV2;
     if (!dialog) {
         // Fallback for environments without DialogV2 — shouldn't happen on
         // v14, but the graceful degradation keeps text-pings working if
         // Foundry ever moves the dialog API again.
-        const text = window.prompt(localize('pings.dialog.textPrompt', 'Ping text:'));
+        const text = window.prompt(tr('pings.dialog.textPrompt', 'Ping text:'));
         if (text) apiBundle?.api.ping('text', position, { text });
         return;
     }
-    const title = localize('pings.dialog.textTitle', 'Pings — text');
-    const label = localize('pings.dialog.textLabel', 'Text');
-    const confirm = localize('pings.dialog.textConfirm', 'Ping');
+    const title = tr('pings.dialog.textTitle', 'Pings — text');
+    const label = tr('pings.dialog.textLabel', 'Text');
+    const confirm = tr('pings.dialog.textConfirm', 'Ping');
     const result = (await dialog.input({
         window: { title },
         content:
-            `<div class="form-group"><label>${label}</label>` +
+            `<div class="form-group"><label>${escapeHtml(label)}</label>` +
             '<input type="text" name="text" autofocus required maxlength="200" />' +
             '</div>',
         ok: { label: confirm, icon: 'fa-solid fa-location-crosshairs' },
@@ -140,13 +176,17 @@ function commitPing(
         return;
     }
 
-    // "Here" commit from preview state: preview is already on screen with
-    // exactly the same visual the commit would render. Keep it (skip the
-    // disposer) and broadcast-only so peers see their copy. The preview
-    // itself was silent — fire audio here so the user gets a confirmation
-    // cue ON RELEASE, matching the "preview = preparing, release = ping"
-    // mental model.
-    if (kind === 'here' && previewDispose) {
+    // "Here" commit from preview state: if the preview is still on screen,
+    // keep it (skip the disposer) and broadcast-only so peers see their
+    // copy. The preview itself was silent — fire audio here so the user
+    // gets a confirmation cue ON RELEASE, matching the "preview =
+    // preparing, release = ping" mental model.
+    //
+    // If the preview has already self-disposed (long hold past the
+    // preview's natural lifetime), fall through to the full render path
+    // so the local user still sees a ping on release.
+    const previewAlive = previewDispose !== null && Date.now() < previewExpiresAt;
+    if (kind === 'here' && previewAlive) {
         audio?.play('here');
         apiBundle.api.sendHere(position);
         return;
@@ -169,8 +209,7 @@ function commitPing(
         const tokenId = findTokenIdAt(position);
         if (!tokenId) {
             ui?.notifications?.warn(
-                game.i18n?.localize('pings.notifications.noTokenUnderCursor') ??
-                    'Pings: no token under the cursor.',
+                tr('pings.notifications.noTokenUnderCursor', 'Pings: no token under the cursor.'),
             );
             return;
         }

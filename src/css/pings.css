@@ -6,7 +6,9 @@
  * center circle live inside an SVG centered on the anchor; each segment's
  * fill is dictated by its `data-kind` attribute so the menu visually mirrors
  * what the resulting ping will look like (rally = gold, alert = red, others
- * tinted with the user color via --pings-user-color).
+ * tinted with three shades of the local user's color: text uses
+ * --pings-user-light, center uses --pings-user-base, token uses
+ * --pings-user-dark, all set on the menu root from JS).
  *
  * Modes:
  *   .pings-radial-menu--passive  — opens-with default, dim + smaller,

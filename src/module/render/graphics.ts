@@ -94,6 +94,11 @@ function createRallyVisual({ color, size }: VisualOptions): PingVisual {
             // organic and you can always see at least one mid-travel.
             const phase = ((elapsedMs / RALLY_CYCLE_MS) + i / RALLY_ARROW_COUNT) % 1;
             const radius = outerR - (outerR - innerR) * phase;
+            // Clamp the arm so the tip (radius - armLen) never crosses
+            // past the menu center as the chevron approaches innerR.
+            // Without this, arm overshoots when radius < armLen and the
+            // chevron visibly inverts.
+            const safeArm = Math.min(armLen, radius * 0.85);
             // Fade in fast, hold, then fade as it reaches the center.
             const fade = phase < 0.15 ? phase / 0.15 : 1 - (phase - 0.15) / 0.85;
             const alpha = RALLY_BASE_ALPHA * fade;
@@ -101,9 +106,9 @@ function createRallyVisual({ color, size }: VisualOptions): PingVisual {
             g.clear();
             g.lineStyle(RALLY_LINE_WIDTH, color, alpha);
             // Chevron tip points inward (toward -X), back at +X radius.
-            g.moveTo(radius, -armLen);
-            g.lineTo(radius - armLen, 0);
-            g.lineTo(radius, armLen);
+            g.moveTo(radius, -safeArm);
+            g.lineTo(radius - safeArm, 0);
+            g.lineTo(radius, safeArm);
         }
     }
 

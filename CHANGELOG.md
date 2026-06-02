@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   built-in setting to disable the native ping, so we override the
   prototype method with a no-op before any `ControlsLayer` instance
   is constructed.
+
+### Changed
+
+- **Token movement is blocked while a token-attach ping is active.** A
+  new `preUpdateToken` hook returns false for any `x` / `y` / `rotation`
+  update targeting a token currently marked by a token-attach ping —
+  the attempted move is rejected and the user (typically a GM moving
+  the token themselves, or another player owner) sees a notification
+  explaining why. The lock is reference-counted, so multiple
+  concurrent attach pings on the same token release the lock only
+  when the last marker fades.
 - Preview-to-commit no longer double-renders for the "here" gesture. The
   trigger now hands the preview disposer to the commit callback, which
   keeps the preview alive when the commit is semantically the preview
