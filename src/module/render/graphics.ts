@@ -105,9 +105,10 @@ const ALERT_PULSE_SCALE = 1.2;
 
 /**
  * "Alert" ping: 4 chevrons pointing outward from the spot, rotating
- * continuously with a sharp on/off pulse. Reads as urgent / kinetic.
- * Color is forced by `buildPayload`; the visual draws whatever color it's
- * handed so the override stays the wire payload's responsibility.
+ * continuously with a sharp 4Hz scale pulse (1.0 ↔ 1.2). Reads as
+ * urgent / kinetic. Color is forced by `buildPayload`; the visual draws
+ * whatever color it's handed so the override stays the wire payload's
+ * responsibility.
  */
 function createAlertVisual({ color, size }: VisualOptions): PingVisual {
     const container = new PIXI.Container();
@@ -155,10 +156,14 @@ const TEXT_FONT_SIZE = 18;
 const TEXT_BG_ALPHA = 0.65;
 const TEXT_MAX_WIDTH_PX = 320;
 
+/** Distance the tag's bottom edge sits above the world origin. */
+const TEXT_OFFSET_Y = 14;
+
 /**
  * "Text" ping: white-on-color rounded tag holding arbitrary text. No
- * rotation, no pulse — the message is the message. Anchors above the
- * world position so the spot it points at remains visible.
+ * rotation, no pulse — the message is the message. The tag is anchored
+ * so its bottom edge sits above the world position, leaving the pinned
+ * spot itself visible underneath.
  */
 function createTextVisual({ color, text }: VisualOptions): PingVisual {
     const container = new PIXI.Container();
@@ -175,13 +180,20 @@ function createTextVisual({ color, text }: VisualOptions): PingVisual {
     label.anchor.x = 0.5;
     label.anchor.y = 0.5;
 
+    // Shift the tag up so its bottom edge sits TEXT_OFFSET_Y above the
+    // world origin — the spot itself stays unobstructed.
+    const labelHeight = label.height;
+    const tagHalfHeight = labelHeight / 2 + TEXT_PADDING_PX;
+    const offsetY = -tagHalfHeight - TEXT_OFFSET_Y;
+    label.y = offsetY;
+
     const bg = new PIXI.Graphics();
     bg.beginFill(color, TEXT_BG_ALPHA);
     bg.drawRoundedRect(
         -label.width / 2 - TEXT_PADDING_PX,
-        -label.height / 2 - TEXT_PADDING_PX,
+        offsetY - labelHeight / 2 - TEXT_PADDING_PX,
         label.width + TEXT_PADDING_PX * 2,
-        label.height + TEXT_PADDING_PX * 2,
+        labelHeight + TEXT_PADDING_PX * 2,
         TEXT_CORNER_RADIUS_PX,
     );
     bg.endFill();

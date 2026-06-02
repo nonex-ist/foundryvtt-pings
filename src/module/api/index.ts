@@ -140,7 +140,32 @@ export function createApi(config: CreateApiConfig): ApiBundle {
                 ? assertPositiveInt(opts.durationMs, 'durationMs')
                 : KIND_DEFAULT_DURATION_MS[kind];
 
-        const moveCanvas = opts?.moveCanvas !== undefined ? opts.moveCanvas : kind === 'rally';
+        let moveCanvas: boolean;
+        if (opts?.moveCanvas !== undefined) {
+            if (typeof opts.moveCanvas !== 'boolean') {
+                throw new TypeError('pings: moveCanvas must be a boolean');
+            }
+            moveCanvas = opts.moveCanvas;
+        } else {
+            moveCanvas = kind === 'rally';
+        }
+
+        if (opts?.text !== undefined && typeof opts.text !== 'string') {
+            throw new TypeError('pings: text must be a string');
+        }
+        if (opts?.tokenId !== undefined && (typeof opts.tokenId !== 'string' || opts.tokenId.length === 0)) {
+            throw new TypeError('pings: tokenId must be a non-empty string');
+        }
+
+        // Required-options check per kind: text needs a non-empty string,
+        // token-attach needs a tokenId — otherwise the resulting ping is
+        // either a blank tag or a stationary "attached" ping going nowhere.
+        if (kind === 'text' && (opts?.text === undefined || opts.text.length === 0)) {
+            throw new TypeError("pings: kind 'text' requires a non-empty `text` option");
+        }
+        if (kind === 'token-attach' && opts?.tokenId === undefined) {
+            throw new TypeError("pings: kind 'token-attach' requires a `tokenId` option");
+        }
 
         const sceneId = config.sceneIdProvider();
         const senderId = config.senderIdProvider();
@@ -156,18 +181,8 @@ export function createApi(config: CreateApiConfig): ApiBundle {
             durationMs,
             moveCanvas,
         };
-        if (opts?.text !== undefined) {
-            if (typeof opts.text !== 'string') {
-                throw new TypeError('pings: text must be a string');
-            }
-            payload.text = opts.text;
-        }
-        if (opts?.tokenId !== undefined) {
-            if (typeof opts.tokenId !== 'string' || opts.tokenId.length === 0) {
-                throw new TypeError('pings: tokenId must be a non-empty string');
-            }
-            payload.tokenId = opts.tokenId;
-        }
+        if (opts?.text !== undefined) payload.text = opts.text;
+        if (opts?.tokenId !== undefined) payload.tokenId = opts.tokenId;
         return payload;
     }
 
