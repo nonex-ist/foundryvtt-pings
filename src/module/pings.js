@@ -14,6 +14,7 @@ var KIND_DEFAULT_DURATION_MS = {
   "token-attach": 4e3
 };
 var ALERT_COLOR = 16724787;
+var RALLY_COLOR = 16762432;
 var MIN_RALLY_ROLE = 2;
 var MIN_ALERT_ROLE = 3;
 var RATE_LIMIT_CAPACITY = 3;
@@ -542,6 +543,8 @@ function createApi(config) {
       color = assertColor(opts.color);
     } else if (kind === "alert") {
       color = ALERT_COLOR;
+    } else if (kind === "rally") {
+      color = RALLY_COLOR;
     } else {
       color = config.senderColorProvider();
     }

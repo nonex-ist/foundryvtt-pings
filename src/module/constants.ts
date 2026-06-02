@@ -28,6 +28,8 @@ export const KIND_DEFAULT_DURATION_MS: Record<PingKind, number> = {
 
 /** Alert pings always use this color regardless of the sender's user color. */
 export const ALERT_COLOR = 0xff3333;
+/** Rally pings always use this color regardless of the sender's user color — gold reads as "beacon / waypoint" cross-cultural shorthand. */
+export const RALLY_COLOR = 0xffc640;
 
 /**
  * Role thresholds (M8 will promote these to game settings). Values follow

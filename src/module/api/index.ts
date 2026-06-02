@@ -1,4 +1,4 @@
-import { ALERT_COLOR, KIND_DEFAULT_DURATION_MS, MODULE_ID } from '../constants.js';
+import { ALERT_COLOR, KIND_DEFAULT_DURATION_MS, MODULE_ID, RALLY_COLOR } from '../constants.js';
 import { SCENE_FLAG_DISABLED } from '../settings/keys.js';
 import { getMinAlertRole, getMinRallyRole } from '../settings/register.js';
 import type { DisplayPingPayload, RemovePingPayload } from '../network/messages.js';
@@ -141,6 +141,8 @@ export function createApi(config: CreateApiConfig): ApiBundle {
             color = assertColor(opts.color);
         } else if (kind === 'alert') {
             color = ALERT_COLOR;
+        } else if (kind === 'rally') {
+            color = RALLY_COLOR;
         } else {
             color = config.senderColorProvider();
         }
