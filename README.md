@@ -6,8 +6,9 @@ A clean-room MIT reimplementation inspired by
 [Azzurite's pings module](https://gitlab.com/foundry-azzurite/pings) for
 older Foundry versions. No upstream code is included.
 
-> **Status:** scaffold only. The lifecycle hooks load cleanly but no ping
-> behaviour is wired yet.
+> **Status:** in development. The hold-trigger input layer and a local
+> "here" ping render are wired. Network broadcast, the full ping-kind
+> API, the radial menu, and bundled sounds are upcoming milestones.
 
 ## Requirements
 

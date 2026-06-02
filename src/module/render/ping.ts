@@ -30,7 +30,10 @@ export function createPing(opts: PingOptions): PingHandle {
     visual.container.alpha = 0;
     parent.addChild(visual.container);
 
-    const cleanup = (): void => {
+    let disposed = false;
+    const dispose = (): void => {
+        if (disposed) return;
+        disposed = true;
         parent.removeChild(visual.container);
         visual.container.destroy({ children: true });
     };
@@ -40,16 +43,13 @@ export function createPing(opts: PingOptions): PingHandle {
         fadeInMs: FADE_IN_MS,
         fadeOutMs: FADE_OUT_MS,
         update: visual.update,
-        onComplete: cleanup,
+        onComplete: dispose,
     });
 
-    let destroyed = false;
     return {
         destroy(): void {
-            if (destroyed) return;
-            destroyed = true;
             cancel();
-            cleanup();
+            dispose();
         },
     };
 }
