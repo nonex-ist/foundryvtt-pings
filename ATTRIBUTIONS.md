@@ -2,23 +2,25 @@
 
 ## Bundled sounds (`src/sounds/`)
 
-The five short Ogg Vorbis clips that ship with the module are placeholder
-sounds synthesized from sine and square waves with ffmpeg (`libvorbis`,
-quality 2). They are original output and covered by the project's MIT
-license — no third-party audio is included.
+Sound effects by **Nathan Gibson** — from the
+[Cyrex Studios Complete Audio Bundle](https://cyrex-studios.itch.io/cyrex-studios-complete-audio-bundle),
+licensed under
+[Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
 
-| File | Source | Notes |
-|---|---|---|
-| `here.ogg` | 600 Hz sine, ~180ms, soft envelope | quiet blip |
-| `rally.ogg` | 500 Hz → 750 Hz sine pair, ~320ms | ascending call |
-| `alert.ogg` | 900 Hz square, ~220ms | harsh attention-grabber |
-| `text.ogg` | 820 Hz sine, ~300ms with long decay | gentle notification |
-| `token-attach.ogg` | 450 Hz sine, ~100ms | subtle tap |
+The original WAV files were converted to Ogg Vorbis with ffmpeg
+(`libvorbis`, quality 4) so they ship in a single web-friendly format.
+No other modifications.
 
-These are placeholders for v0.1 — they read as functional but utilitarian.
-A future release may replace them with curated CC0 audio (e.g. from
-[Kenney](https://kenney.nl/assets/category:Audio)). Any swap-in must
-remain CC0 / MIT-compatible.
+| File               | Kind         |
+| ------------------ | ------------ |
+| `here.ogg`         | here         |
+| `rally.ogg`        | rally        |
+| `alert.ogg`        | alert        |
+| `text.ogg`         | text         |
+| `token-attach.ogg` | token-attach |
+
+If you replace any of these clips, keep them CC BY 4.0 / CC0 / MIT-compatible
+and update this file.
 
 ## Inspiration
 
