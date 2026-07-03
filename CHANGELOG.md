@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-07-03
+
+### Changed
+
+- Verified against Foundry VTT v14 build 364 — `compatibility.verified`
+  bumped from `14` to `14.364`. `minimum` / `maximum` are unchanged, so
+  the module still installs on any v14 build.
+- Updated development tooling within existing version ranges (eslint,
+  typescript-eslint, vitest, esbuild, commitlint, lint-staged). No
+  runtime impact — the module still ships with zero runtime dependencies.
+
 ## [1.0.0] — 2026-06-02
 
 First stable release.
