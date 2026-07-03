@@ -2,7 +2,7 @@
   "id": "nonex-ist-pings",
   "title": "Pings",
   "description": "Click-and-hold map pings for Foundry VTT.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "compatibility": {
     "minimum": "14",
     "verified": "14.364",
